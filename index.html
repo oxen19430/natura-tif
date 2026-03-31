@@ -800,49 +800,33 @@ tr:nth-child(even) { background: var(--gray-light); }
     <h1>Historique &amp; Export</h1>
   </div>
   <div class="scroll-area">
-    <div class="card">
-      <div class="form-group">
-        <label class="form-label">Période</label>
-        <select class="form-input" id="filter-period" onchange="onPeriodChange()">
-          <option value="jour">Aujourd'hui</option>
-          <option value="semaine">Cette semaine</option>
-          <option value="mois" selected>Ce mois</option>
-          <option value="custom">Personnalisé</option>
-        </select>
-      </div>
-      <div id="custom-dates" style="display:none;">
-        <div class="btn-row">
-          <div class="form-group" style="flex:1;">
-            <label class="form-label">Du</label>
-            <input type="date" class="form-input" id="filter-start">
-          </div>
-          <div class="form-group" style="flex:1;">
-            <label class="form-label">Au</label>
-            <input type="date" class="form-input" id="filter-end">
-          </div>
-        </div>
-      </div>
-      <div class="btn-row" style="margin-top:8px;">
-        <div class="form-group" style="flex:1;">
-          <label class="form-label">Catégorie</label>
-          <select class="form-input" id="filter-cat">
-            <option value="tous">Tous</option>
-            <option value="homme">Homme</option>
-            <option value="femme">Femme</option>
-            <option value="enfant">Enfant</option>
-          </select>
-        </div>
-        <div class="form-group" style="flex:1;">
-          <label class="form-label">Paiement</label>
-          <select class="form-input" id="filter-pay">
-            <option value="tous">Tous</option>
-            <option value="especes">Espèces</option>
-            <option value="cb">CB</option>
-            <option value="cheque">Chèque</option>
-          </select>
-        </div>
-      </div>
-      <button class="btn btn-primary btn-small" onclick="applyFilters()">FILTRER</button>
+    <!-- Period tabs -->
+    <div class="tabs">
+      <button class="tab active" onclick="setHistoPeriod('jour', this)">Jour</button>
+      <button class="tab" onclick="setHistoPeriod('semaine', this)">Semaine</button>
+      <button class="tab" onclick="setHistoPeriod('mois', this)">Mois</button>
+      <button class="tab" onclick="setHistoPeriod('annee', this)">Année</button>
+    </div>
+    <!-- Period navigation -->
+    <div style="display:flex; align-items:center; justify-content:space-between; margin:12px 0; gap:8px;">
+      <button class="btn btn-outline btn-icon-only btn-small" onclick="histoNav(-1)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+      <div style="flex:1; text-align:center; font-weight:700; font-size:16px; color:var(--primary);" id="histo-period-label"></div>
+      <button class="btn btn-outline btn-icon-only btn-small" onclick="histoNav(1)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+    </div>
+    <!-- Filters -->
+    <div style="display:flex; gap:8px; margin-bottom:12px;">
+      <select class="form-input" id="filter-cat" onchange="applyFilters()" style="flex:1;">
+        <option value="tous">Tous</option>
+        <option value="homme">Homme</option>
+        <option value="femme">Femme</option>
+        <option value="enfant">Enfant</option>
+      </select>
+      <select class="form-input" id="filter-pay" onchange="applyFilters()" style="flex:1;">
+        <option value="tous">Tous</option>
+        <option value="especes">Espèces</option>
+        <option value="cb">CB</option>
+        <option value="cheque">Chèque</option>
+      </select>
     </div>
     <div id="histo-results"></div>
     <div class="btn-group" style="margin-top:16px;">
@@ -1009,7 +993,7 @@ function showScreen(id) {
   currentScreen = id;
   if (id === 'screen-home') updateHome();
   if (id === 'screen-fond') updateFond();
-  if (id === 'screen-histo') applyFilters();
+  if (id === 'screen-histo') { histoPeriodType = 'jour'; histoOffset = 0; document.querySelectorAll('#screen-histo .tab').forEach((t,i) => t.classList.toggle('active', i===0)); applyFilters(); }
   if (id === 'screen-settings') loadSettings();
   if (id === 'screen-cat') renderProgress('progress-1', 1);
   if (id === 'screen-presta') renderProgress('progress-2', 2);
@@ -1203,33 +1187,63 @@ function saveFond() {
 }
 
 // ==================== HISTORIQUE ====================
-function onPeriodChange() {
-  document.getElementById('custom-dates').style.display = document.getElementById('filter-period').value === 'custom' ? 'block' : 'none';
+let histoPeriodType = 'jour';
+let histoOffset = 0; // 0 = current, -1 = previous, etc.
+let lastFiltered = [];
+
+const MOIS_NOMS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+const JOURS_NOMS = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
+
+function setHistoPeriod(type, btn) {
+  vibrate();
+  histoPeriodType = type;
+  histoOffset = 0;
+  document.querySelectorAll('#screen-histo .tab').forEach(t => t.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  applyFilters();
+}
+
+function histoNav(dir) {
+  vibrate();
+  histoOffset += dir;
+  applyFilters();
 }
 
 function getFilterDates() {
-  const period = document.getElementById('filter-period').value;
   const today = new Date();
-  let start, end;
-  if (period === 'jour') {
-    start = end = todayStr();
-  } else if (period === 'semaine') {
+  let start, end, label;
+
+  if (histoPeriodType === 'jour') {
+    const d = new Date(today);
+    d.setDate(d.getDate() + histoOffset);
+    const ds = d.toISOString().slice(0, 10);
+    start = end = ds;
+    label = JOURS_NOMS[d.getDay()] + ' ' + d.getDate() + ' ' + MOIS_NOMS[d.getMonth()] + ' ' + d.getFullYear();
+  } else if (histoPeriodType === 'semaine') {
     const d = new Date(today);
     const day = d.getDay() || 7;
-    d.setDate(d.getDate() - day + 1);
+    d.setDate(d.getDate() - day + 1 + (histoOffset * 7));
     start = d.toISOString().slice(0, 10);
-    end = todayStr();
-  } else if (period === 'mois') {
-    start = today.toISOString().slice(0, 8) + '01';
-    end = todayStr();
-  } else {
-    start = document.getElementById('filter-start').value || todayStr();
-    end = document.getElementById('filter-end').value || todayStr();
+    const dEnd = new Date(d);
+    dEnd.setDate(dEnd.getDate() + 6);
+    end = dEnd.toISOString().slice(0, 10);
+    label = d.getDate() + ' ' + MOIS_NOMS[d.getMonth()].slice(0,3) + ' — ' + dEnd.getDate() + ' ' + MOIS_NOMS[dEnd.getMonth()].slice(0,3) + ' ' + dEnd.getFullYear();
+  } else if (histoPeriodType === 'mois') {
+    const d = new Date(today.getFullYear(), today.getMonth() + histoOffset, 1);
+    start = d.toISOString().slice(0, 10);
+    const dEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    end = dEnd.toISOString().slice(0, 10);
+    label = MOIS_NOMS[d.getMonth()] + ' ' + d.getFullYear();
+  } else if (histoPeriodType === 'annee') {
+    const year = today.getFullYear() + histoOffset;
+    start = year + '-01-01';
+    end = year + '-12-31';
+    label = 'Année ' + year;
   }
+
+  document.getElementById('histo-period-label').textContent = label;
   return { start, end };
 }
-
-let lastFiltered = [];
 
 function applyFilters() {
   const { start, end } = getFilterDates();
