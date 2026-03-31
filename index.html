@@ -1393,25 +1393,15 @@ async function sendEmail() {
   body += `Espèces : ${formatMoney(totalEspeces)}\nCarte bancaire : ${formatMoney(totalCB)}\nChèque : ${formatMoney(totalCheque)}\n`;
   if (settings.gerante) body += `\nCordialement,\n${settings.gerante}`;
 
-  const pdfFile = new File([blob], fileName, { type: 'application/pdf' });
-
-  // Try Web Share API (works on Android with file attachment)
-  if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
-    try {
-      await navigator.share({
-        title: subject,
-        text: body,
-        files: [pdfFile]
-      });
-      return;
-    } catch(e) { /* user cancelled or error, fall through to mailto */ }
-  }
-
-  // Fallback: download PDF + open mailto
+  // 1. Download PDF automatically
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href = url; a.download = fileName; a.click();
   URL.revokeObjectURL(url);
-  window.location.href = `mailto:${settings.email || ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body + '\n\n---\nLe PDF est téléchargé séparément, pensez à le joindre.')}`;
+
+  // 2. Open email client with recipient, subject & body pre-filled
+  setTimeout(() => {
+    window.location.href = `mailto:${settings.email || ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body + '\n\n---\nLe PDF a été téléchargé, pensez à le joindre à cet email.')}`;
+  }, 500);
 }
 
 // ==================== TARIFS ====================
