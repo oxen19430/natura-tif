@@ -1304,6 +1304,14 @@ function deleteTx(id) {
 
 // ==================== EXPORT PDF ====================
 function exportPDF() {
+  const { blob, fileName } = buildPDFBlob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = fileName; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ==================== EMAIL ====================
+function buildPDFBlob() {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
   const settings = getSettings();
@@ -1354,30 +1362,44 @@ function exportPDF() {
     headStyles: { fillColor: [91, 87, 35] },
     alternateRowStyles: { fillColor: [242, 240, 232] }
   });
-  doc.save(`${(settings.salon || 'NaturaTif').replace(/\s/g, '_')}_${start}_${end}.pdf`);
+
+  const fileName = `${(settings.salon || 'NaturaTif').replace(/\s/g, '_')}_${start}_${end}.pdf`;
+  return { blob: doc.output('blob'), fileName, totalGen, totalEspeces, totalCB, totalCheque, start, end, txs };
 }
 
-// ==================== EMAIL ====================
-function sendEmail() {
+async function sendEmail() {
   const settings = getSettings();
-  const { start, end } = getFilterDates();
-  const txs = lastFiltered;
-  const totalGen = txs.reduce((s, t) => s + t.montant, 0);
-  const totalEspeces = txs.filter(t => t.paiement === 'especes').reduce((s, t) => s + t.montant, 0);
-  const totalCB = txs.filter(t => t.paiement === 'cb').reduce((s, t) => s + t.montant, 0);
-  const totalCheque = txs.filter(t => t.paiement === 'cheque').reduce((s, t) => s + t.montant, 0);
+  const { blob, fileName, totalGen, totalEspeces, totalCB, totalCheque, start, end, txs } = buildPDFBlob();
   const moisNoms = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
   const d = new Date(start);
   const moisAnnee = moisNoms[d.getMonth()] + ' ' + d.getFullYear();
-  const subject = encodeURIComponent(`${settings.salon || 'Natura Tif'} — Récapitulatif ${moisAnnee}`);
+  const subject = `${settings.salon || 'Natura Tif'} — Récapitulatif ${moisAnnee}`;
   let body = `${settings.salon || 'Natura Tif'} — Récapitulatif ${moisAnnee}\n\n`;
   body += `Période : ${formatDate(start)} au ${formatDate(end)}\n`;
   body += `Nombre d'encaissements : ${txs.length}\n\n`;
   body += `TOTAL GÉNÉRAL : ${formatMoney(totalGen)}\n\n`;
-  body += `Espèces : ${formatMoney(totalEspeces)}\nCarte bancaire : ${formatMoney(totalCB)}\nChèque : ${formatMoney(totalCheque)}\n\n`;
-  body += `---\nVeuillez trouver le détail en pièce jointe (PDF).\nPensez à exporter le PDF depuis l'application et à le joindre à cet email.\n`;
+  body += `Espèces : ${formatMoney(totalEspeces)}\nCarte bancaire : ${formatMoney(totalCB)}\nChèque : ${formatMoney(totalCheque)}\n`;
   if (settings.gerante) body += `\nCordialement,\n${settings.gerante}`;
-  window.location.href = `mailto:${settings.email || ''}?subject=${subject}&body=${encodeURIComponent(body)}`;
+
+  const pdfFile = new File([blob], fileName, { type: 'application/pdf' });
+
+  // Try Web Share API (works on Android with file attachment)
+  if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+    try {
+      await navigator.share({
+        title: subject,
+        text: body,
+        files: [pdfFile]
+      });
+      return;
+    } catch(e) { /* user cancelled or error, fall through to mailto */ }
+  }
+
+  // Fallback: download PDF + open mailto
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = fileName; a.click();
+  URL.revokeObjectURL(url);
+  window.location.href = `mailto:${settings.email || ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body + '\n\n---\nLe PDF est téléchargé séparément, pensez à le joindre.')}`;
 }
 
 // ==================== TARIFS ====================
