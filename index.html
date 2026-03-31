@@ -963,7 +963,8 @@ function getTransactions() { return getJSON('nt_transactions', []); }
 function getFonds() { return getJSON('nt_fonds', {}); }
 function getSettings() { return getJSON('nt_settings', { salon: 'Natura Tif', gerante: '', email: '' }); }
 function uuid() { return Date.now().toString(36) + Math.random().toString(36).substr(2, 5); }
-function todayStr() { return new Date().toISOString().slice(0, 10); }
+function dateToStr(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+function todayStr() { return dateToStr(new Date()); }
 function formatDate(d) { const [y, m, day] = d.split('-'); return `${day}/${m}/${y}`; }
 function formatMoney(v) { return Number(v).toFixed(2).replace('.', ',') + ' €'; }
 function nowTime() { const n = new Date(); return n.getHours().toString().padStart(2,'0') + ':' + n.getMinutes().toString().padStart(2,'0'); }
@@ -1214,25 +1215,22 @@ function getFilterDates() {
   let start, end, label;
 
   if (histoPeriodType === 'jour') {
-    const d = new Date(today);
-    d.setDate(d.getDate() + histoOffset);
-    const ds = d.toISOString().slice(0, 10);
-    start = end = ds;
+    const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + histoOffset);
+    start = end = dateToStr(d);
     label = JOURS_NOMS[d.getDay()] + ' ' + d.getDate() + ' ' + MOIS_NOMS[d.getMonth()] + ' ' + d.getFullYear();
   } else if (histoPeriodType === 'semaine') {
-    const d = new Date(today);
+    const d = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     const day = d.getDay() || 7;
     d.setDate(d.getDate() - day + 1 + (histoOffset * 7));
-    start = d.toISOString().slice(0, 10);
-    const dEnd = new Date(d);
-    dEnd.setDate(dEnd.getDate() + 6);
-    end = dEnd.toISOString().slice(0, 10);
+    start = dateToStr(d);
+    const dEnd = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 6);
+    end = dateToStr(dEnd);
     label = d.getDate() + ' ' + MOIS_NOMS[d.getMonth()].slice(0,3) + ' — ' + dEnd.getDate() + ' ' + MOIS_NOMS[dEnd.getMonth()].slice(0,3) + ' ' + dEnd.getFullYear();
   } else if (histoPeriodType === 'mois') {
     const d = new Date(today.getFullYear(), today.getMonth() + histoOffset, 1);
-    start = d.toISOString().slice(0, 10);
+    start = dateToStr(d);
     const dEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-    end = dEnd.toISOString().slice(0, 10);
+    end = dateToStr(dEnd);
     label = MOIS_NOMS[d.getMonth()] + ' ' + d.getFullYear();
   } else if (histoPeriodType === 'annee') {
     const year = today.getFullYear() + histoOffset;
