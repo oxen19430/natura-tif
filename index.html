@@ -1,0 +1,1674 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#5B5723">
+<title>Natura Tif — Caisse</title>
+<!-- PWA Manifest inline -->
+<script>
+const manifest = {
+  "name": "Natura Tif — Caisse",
+  "short_name": "Natura Tif",
+  "description": "Application de caisse du salon Natura Tif",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FAF8F2",
+  "theme_color": "#5B5723",
+  "icons": [{
+    "src": "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192"><rect width="192" height="192" rx="32" fill="#5B5723"/><text x="96" y="78" font-family="serif" font-size="48" font-weight="bold" fill="#FAF8F2" text-anchor="middle">Natura</text><text x="96" y="128" font-family="serif" font-size="48" font-weight="bold" fill="#A3B835" text-anchor="middle">Tif</text></svg>'),
+    "sizes": "192x192",
+    "type": "image/svg+xml",
+    "purpose": "any maskable"
+  }]
+};
+const blob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
+const manifestURL = URL.createObjectURL(blob);
+const link = document.createElement('link');
+link.rel = 'manifest';
+link.href = manifestURL;
+document.head.appendChild(link);
+
+// Register Service Worker for offline PWA
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
+</script>
+<!-- Apple touch icon -->
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='28' fill='%235B5723'/%3E%3Ctext x='90' y='72' font-family='serif' font-size='42' font-weight='bold' fill='%23FAF8F2' text-anchor='middle'%3ENatura%3C/text%3E%3Ctext x='90' y='118' font-family='serif' font-size='42' font-weight='bold' fill='%23A3B835' text-anchor='middle'%3ETif%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  height: 100%;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: #FAF8F2;
+  color: #2D2A1E;
+  font-size: 18px;
+  overflow-x: hidden;
+}
+
+:root {
+  --primary: #5B5723;
+  --primary-light: #F0EDE0;
+  --primary-dark: #3D3B18;
+  --green: #7A9B2E;
+  --green-light: #EFF4E0;
+  --red: #B83A2A;
+  --red-light: #FBEAE7;
+  --gray: #6B6650;
+  --gray-light: #F2F0E8;
+  --border: #DDD9C8;
+  --shadow: 0 3px 12px rgba(60,55,20,0.10);
+  --shadow-lg: 0 8px 24px rgba(60,55,20,0.15);
+  --cat-homme: #6B7B3A;
+  --cat-femme: #8B6B4A;
+  --cat-enfant: #4A7B6B;
+  --radius: 16px;
+  --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ===== Floral background pattern ===== */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-image:
+    radial-gradient(circle at 85% 15%, rgba(91,87,35,0.03) 0%, transparent 50%),
+    radial-gradient(circle at 10% 85%, rgba(91,87,35,0.03) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+}
+body::after {
+  content: '';
+  position: fixed;
+  top: -60px; right: -60px;
+  width: 250px; height: 250px;
+  background: radial-gradient(circle, rgba(163,184,53,0.08) 0%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ===== Screen transitions ===== */
+.screen {
+  display: none;
+  min-height: 100vh;
+  padding: 20px;
+  padding-bottom: 40px;
+  position: relative;
+  z-index: 1;
+  opacity: 0;
+  transform: translateX(30px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.screen.active {
+  display: flex;
+  flex-direction: column;
+  opacity: 1;
+  transform: translateX(0);
+}
+.screen.slide-out {
+  opacity: 0;
+  transform: translateX(-30px);
+}
+
+/* ===== Header ===== */
+.header {
+  text-align: center;
+  padding: 16px 0;
+  border-bottom: 2px solid var(--primary-light);
+  margin-bottom: 20px;
+}
+.header h1 {
+  font-family: 'Playfair Display', serif;
+  font-size: 30px;
+  color: var(--primary);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+.header .subtitle {
+  font-size: 15px;
+  color: var(--gray);
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+/* ===== Logo brand ===== */
+.brand {
+  text-align: center;
+  padding: 20px 0 12px;
+}
+.brand h1 {
+  font-family: 'Playfair Display', serif;
+  font-size: 36px;
+  color: var(--primary);
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.brand .tagline {
+  font-size: 14px;
+  color: var(--gray);
+  margin-top: 2px;
+  font-weight: 500;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+/* ===== Progress bar ===== */
+.progress-bar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-bottom: 20px;
+  padding: 0 10px;
+}
+.progress-step {
+  display: flex;
+  align-items: center;
+  flex: 1;
+}
+.progress-dot {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--gray);
+  flex-shrink: 0;
+  transition: all var(--transition);
+}
+.progress-dot.active {
+  background: var(--primary);
+  color: white;
+  box-shadow: 0 0 0 4px rgba(91,87,35,0.15);
+}
+.progress-dot.done {
+  background: var(--green);
+  color: white;
+}
+.progress-line {
+  flex: 1;
+  height: 3px;
+  background: var(--border);
+  margin: 0 4px;
+  border-radius: 2px;
+  transition: background var(--transition);
+}
+.progress-line.done { background: var(--green); }
+.progress-label {
+  font-size: 10px;
+  text-align: center;
+  color: var(--gray);
+  margin-top: 4px;
+  position: absolute;
+  bottom: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+/* ===== Buttons ===== */
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  padding: 16px;
+  border: none;
+  border-radius: var(--radius);
+  font-family: 'Inter', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s, background 0.15s;
+  text-align: center;
+  line-height: 1.3;
+  position: relative;
+  overflow: hidden;
+  flex-direction: column;
+}
+.btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(255,255,255,0);
+  transition: background 0.15s;
+  border-radius: inherit;
+}
+.btn:active { transform: scale(0.95); }
+.btn:active::after { background: rgba(255,255,255,0.1); }
+
+.btn-primary { background: var(--primary); color: white; box-shadow: var(--shadow); }
+.btn-primary:active { background: var(--primary-dark); }
+.btn-green { background: var(--green); color: white; box-shadow: var(--shadow); }
+.btn-green:active { background: #5F7A1E; }
+.btn-red { background: var(--red); color: white; box-shadow: var(--shadow); }
+.btn-red:active { background: #8E2D20; }
+.btn-outline { background: #FDFCF8; color: var(--primary); border: 2px solid var(--border); }
+.btn-outline:active { background: var(--primary-light); border-color: var(--primary); }
+.btn-gray { background: var(--gray-light); color: var(--gray); }
+.btn-gray:active { background: var(--border); }
+.btn-small { min-height: 50px; font-size: 16px; padding: 10px 16px; aspect-ratio: auto; }
+.btn-icon-only { width: 50px; min-height: 50px; padding: 0; font-size: 22px; flex-shrink: 0; aspect-ratio: auto; }
+.btn-noSquare { aspect-ratio: auto; min-height: 70px; flex-direction: row; }
+.btn-compact { aspect-ratio: 3 / 2; }
+.btn-full { grid-column: 1 / -1; }
+
+/* Category colors */
+.btn-cat-homme { background: var(--cat-homme); color: white; box-shadow: var(--shadow); }
+.btn-cat-homme:active { background: #566630; }
+.btn-cat-femme { background: var(--cat-femme); color: white; box-shadow: var(--shadow); }
+.btn-cat-femme:active { background: #73573C; }
+.btn-cat-enfant { background: var(--cat-enfant); color: white; box-shadow: var(--shadow); }
+.btn-cat-enfant:active { background: #3C6658; }
+
+/* Icon inside button */
+.btn .btn-label { font-size: 18px; }
+
+.btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; }
+.btn-row { display: flex; gap: 12px; }
+.btn-row .btn { flex: 1; }
+
+/* ===== Cards ===== */
+.card {
+  background: #FDFCF8;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 4px rgba(60,55,20,0.04);
+}
+.card-highlight { border-color: var(--primary); background: var(--primary-light); }
+
+/* ===== Stats bar ===== */
+.stats-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--primary-light);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+}
+.stat-item { text-align: center; flex: 1; }
+.stat-label { font-size: 11px; color: var(--gray); text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+.stat-value { font-size: 22px; font-weight: 700; color: var(--primary); margin-top: 2px; }
+
+/* ===== Sync status badge ===== */
+.sync-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  margin: 0 auto 12px;
+  width: fit-content;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+  letter-spacing: 0.3px;
+}
+.sync-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.sync-unconfigured { background: var(--gray-light); color: var(--gray); border-color: var(--border); }
+.sync-unconfigured .sync-dot { background: #bbb; }
+.sync-offline { background: #FBE9E7; color: #8B2A1E; border-color: #F5C6C0; }
+.sync-offline .sync-dot { background: var(--red); }
+.sync-pending { background: #FFF8E5; color: #8B5E00; border-color: #FFE082; }
+.sync-pending .sync-dot { background: #E89B2A; animation: sync-pulse 1.5s infinite; }
+.sync-syncing { background: #E8F0FE; color: #1A5276; border-color: #90CAF9; }
+.sync-syncing .sync-dot { background: #4A90E2; animation: sync-pulse 0.8s infinite; }
+.sync-ok { background: var(--green-light); color: #3B5E10; border-color: #C5E08A; }
+.sync-ok .sync-dot { background: var(--green); }
+@keyframes sync-pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+
+/* ===== Mini chart bars ===== */
+.mini-chart {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.mini-bar-group {
+  flex: 1;
+  background: #FDFCF8;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+}
+.mini-bar-group .mb-title {
+  font-size: 11px;
+  color: var(--gray);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.mini-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.mini-bar-row:last-child { margin-bottom: 0; }
+.mini-bar-label { font-size: 12px; width: 22px; font-weight: 600; color: var(--gray); }
+.mini-bar-track {
+  flex: 1;
+  height: 14px;
+  background: var(--gray-light);
+  border-radius: 7px;
+  overflow: hidden;
+}
+.mini-bar-fill {
+  height: 100%;
+  border-radius: 7px;
+  transition: width 0.6s ease;
+  min-width: 0;
+}
+.mini-bar-val { font-size: 12px; font-weight: 700; color: var(--primary); min-width: 50px; text-align: right; }
+
+/* ===== Service buttons ===== */
+.btn-service {
+  text-align: left;
+  justify-content: space-between;
+  flex-direction: row;
+  background: #FDFCF8;
+  border: 2px solid var(--border);
+  color: #2D2A1E;
+  aspect-ratio: auto;
+  min-height: 70px;
+  box-shadow: 0 1px 4px rgba(60,55,20,0.04);
+}
+.btn-service:active { border-color: var(--primary); background: var(--primary-light); transform: scale(0.98); }
+.btn-service .service-name { flex: 1; font-size: 17px; font-weight: 600; }
+.btn-service .service-price { font-size: 22px; color: var(--primary); font-weight: 700; white-space: nowrap; margin-left: 12px; }
+
+/* ===== Recap ===== */
+.recap-row { display: flex; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid var(--border); font-size: 18px; }
+.recap-row:last-child { border-bottom: none; }
+.recap-label { color: var(--gray); font-weight: 500; }
+.recap-value { font-weight: 700; }
+.recap-total { text-align: center; padding: 24px 0; }
+.recap-total .recap-total-label { font-size: 16px; color: var(--gray); text-transform: uppercase; letter-spacing: 1px; }
+.recap-total .recap-total-amount { font-size: 48px; font-weight: 700; color: var(--primary); font-family: 'Playfair Display', serif; display: block; margin-top: 4px; }
+
+/* ===== Forms ===== */
+.form-group { margin-bottom: 16px; }
+.form-label { display: block; font-size: 14px; color: var(--gray); margin-bottom: 6px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+.form-input { width: 100%; height: 54px; padding: 0 16px; border: 2px solid var(--border); border-radius: 12px; font-size: 18px; font-family: 'Inter', sans-serif; background: white; -webkit-appearance: none; transition: border-color var(--transition); }
+.form-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(91,87,35,0.1); }
+select.form-input { cursor: pointer; }
+
+/* ===== Table ===== */
+.table-wrap { overflow-x: auto; margin: 16px 0; border-radius: 12px; border: 1px solid var(--border); }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { background: var(--primary); color: white; padding: 12px 8px; text-align: left; font-weight: 600; white-space: nowrap; font-size: 13px; }
+th:first-child { border-radius: 10px 0 0 0; }
+th:last-child { border-radius: 0 10px 0 0; }
+td { padding: 10px 8px; border-bottom: 1px solid var(--border); }
+tr:nth-child(even) { background: var(--gray-light); }
+
+/* ===== Totals grid ===== */
+.totals-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 16px 0; }
+.total-card { background: var(--primary-light); border-radius: 12px; padding: 14px; text-align: center; border: 1px solid var(--border); }
+.total-card .tc-label { font-size: 11px; color: var(--gray); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+.total-card .tc-value { font-size: 20px; font-weight: 700; color: var(--primary); }
+.total-card.full { grid-column: 1 / -1; background: var(--primary); border-color: var(--primary); }
+.total-card.full .tc-label { color: rgba(255,255,255,0.8); }
+.total-card.full .tc-value { color: white; font-size: 28px; }
+
+/* ===== Back button ===== */
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: var(--primary);
+  font-size: 16px;
+  font-weight: 600;
+  padding: 8px 0;
+  cursor: pointer;
+  margin-bottom: 6px;
+  font-family: 'Inter', sans-serif;
+}
+.back-btn::before { content: "\2190"; font-size: 20px; }
+
+/* ===== Alert box ===== */
+.alert {
+  background: #FEF3C7;
+  border: 2px solid #F59E0B;
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 20px;
+  font-size: 16px;
+  line-height: 1.6;
+}
+.alert strong { display: block; font-size: 20px; margin-bottom: 8px; color: #92400E; }
+
+/* ===== Settings icon ===== */
+.settings-btn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 46px;
+  height: 46px;
+  border: 2px solid var(--border);
+  background: #FDFCF8;
+  border-radius: 12px;
+  font-size: 22px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+.settings-btn:active { background: var(--primary-light); }
+
+/* ===== Tarif edit row ===== */
+.tarif-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+.tarif-row .form-input { flex: 1; height: 48px; }
+.tarif-row .form-input.price-input { width: 100px; flex: none; text-align: right; }
+
+/* ===== Category tabs ===== */
+.tabs { display: flex; gap: 8px; margin-bottom: 16px; overflow-x: auto; }
+.tab { flex: 1; min-height: 48px; padding: 10px; border: 2px solid var(--border); border-radius: 12px; background: #FDFCF8; font-size: 15px; font-weight: 600; cursor: pointer; text-align: center; white-space: nowrap; font-family: 'Inter', sans-serif; transition: all 0.15s; }
+.tab.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+/* ===== Modal ===== */
+.overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.45); z-index: 100; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(4px); }
+.overlay.active { display: flex; }
+.modal { background: white; border-radius: 20px; padding: 28px; max-width: 400px; width: 100%; text-align: center; box-shadow: var(--shadow-lg); }
+.modal h3 { font-size: 22px; margin-bottom: 12px; font-family: 'Playfair Display', serif; }
+.modal p { font-size: 16px; color: var(--gray); margin-bottom: 24px; line-height: 1.5; }
+
+/* ===== Scroll ===== */
+.scroll-area { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+
+/* ===== Success animation ===== */
+.flash {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(250,248,242,0.97);
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+.flash.active { display: flex; }
+.flash .check-circle {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: var(--green);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+  animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.flash .check-circle svg { width: 50px; height: 50px; }
+.flash .flash-text {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--primary);
+  font-family: 'Playfair Display', serif;
+  animation: fadeUp 0.4s ease 0.15s both;
+}
+@keyframes popIn { 0% { transform: scale(0); } 100% { transform: scale(1); } }
+@keyframes fadeUp { 0% { opacity: 0; transform: translateY(10px); } 100% { opacity: 1; transform: translateY(0); } }
+
+/* ===== Misc ===== */
+.delete-tx { color: var(--red); font-size: 13px; cursor: pointer; text-decoration: underline; }
+.clock { font-size: 14px; color: var(--gray); font-weight: 500; }
+
+/* ===== Last transaction banner ===== */
+.last-tx {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--green-light);
+  border: 1px solid rgba(122,155,46,0.3);
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+.last-tx .lt-info { flex: 1; }
+.last-tx .lt-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--gray); font-weight: 600; }
+.last-tx .lt-detail { font-weight: 600; color: var(--primary); margin-top: 2px; }
+.last-tx .lt-cancel { background: var(--red); color: white; border: none; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; }
+
+/* ===== Sync floating icon ===== */
+.sync-floating {
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  z-index: 999;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #FDFCF8;
+  border: 1.5px solid var(--border);
+  box-shadow: 0 2px 8px rgba(60,55,20,0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.sync-floating:active { transform: scale(0.9); }
+.sync-floating svg { color: var(--gray); }
+.sync-floating .sync-indicator {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid #FDFCF8;
+}
+.sync-floating.sf-unconfigured .sync-indicator { background: #bbb; }
+.sync-floating.sf-offline .sync-indicator { background: var(--red); }
+.sync-floating.sf-pending .sync-indicator { background: #E89B2A; animation: sync-pulse 1.5s infinite; }
+.sync-floating.sf-syncing .sync-indicator { background: #4A90E2; animation: sync-pulse 0.8s infinite; }
+.sync-floating.sf-ok .sync-indicator { background: var(--green); }
+.sync-tooltip {
+  display: none;
+  position: fixed;
+  top: 60px;
+  left: 14px;
+  background: var(--primary-dark);
+  color: white;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  z-index: 999;
+  box-shadow: var(--shadow-lg);
+  max-width: 260px;
+  line-height: 1.4;
+}
+.sync-tooltip.visible { display: block; animation: fadeIn 0.15s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ===== SVG Icons ===== */
+.ico { display: inline-block; width: 28px; height: 28px; vertical-align: middle; flex-shrink: 0; }
+.ico-lg { width: 36px; height: 36px; }
+.ico-xl { width: 44px; height: 44px; }
+.ico svg { width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+
+<!-- ============ SYNC FLOATING ICON ============ -->
+<div class="sync-floating sf-unconfigured" id="sync-float" onclick="toggleSyncTooltip()">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+  <span class="sync-indicator"></span>
+</div>
+<div class="sync-tooltip" id="sync-tooltip"></div>
+
+<!-- ============ FLASH SUCCESS ============ -->
+<div class="flash" id="flash">
+  <div class="check-circle">
+    <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+  </div>
+  <div class="flash-text">Encaissement enregistré</div>
+</div>
+
+<!-- ============ MODAL CONFIRM ============ -->
+<div class="overlay" id="modal">
+  <div class="modal">
+    <h3 id="modal-title">Confirmer</h3>
+    <p id="modal-text">Êtes-vous sûr(e) ?</p>
+    <div class="btn-row">
+      <button class="btn btn-gray btn-small" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-red btn-small" id="modal-confirm">Confirmer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ ACCUEIL ============ -->
+<div class="screen active" id="screen-home">
+  <button class="settings-btn" onclick="showScreen('screen-settings')" title="Paramètres"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+  <div class="brand">
+    <h1 id="brand-name">Natura Tif</h1>
+    <div class="tagline">Salon de coiffure — Laroquebrou</div>
+  </div>
+
+  <div class="stats-bar">
+    <div class="stat-item">
+      <div class="stat-label">Date</div>
+      <div class="stat-value" id="home-date"></div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-label">Total du jour</div>
+      <div class="stat-value" id="home-total">0,00 €</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-label">Clients</div>
+      <div class="stat-value" id="home-count">0</div>
+    </div>
+  </div>
+
+  <!-- Mini charts -->
+  <div class="mini-chart" id="home-charts"></div>
+
+  <!-- Last transaction -->
+  <div id="last-tx-container"></div>
+
+  <div style="flex:1; display:flex; align-items:center; justify-content:center; padding:10px 0;">
+    <button class="btn btn-primary btn-noSquare btn-full" style="min-height:90px; font-size:22px; max-width:100%;" onclick="startEncaissement()">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg> NOUVEL ENCAISSEMENT
+    </button>
+  </div>
+
+  <div class="btn-group" style="margin-top:auto;">
+    <button class="btn btn-outline btn-compact" onclick="showScreen('screen-fond')">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="6" y1="14" x2="10" y2="14"/></svg>
+      <span class="btn-label">FOND DE CAISSE</span>
+    </button>
+    <button class="btn btn-outline btn-compact" onclick="showScreen('screen-histo')">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>
+      <span class="btn-label">HISTORIQUE &amp; EXPORT</span>
+    </button>
+    <button class="btn btn-outline btn-full btn-noSquare" onclick="showTarifs()" style="min-height:56px;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+      <span>GÉRER LES TARIFS</span>
+    </button>
+  </div>
+</div>
+
+<!-- ============ ÉTAPE 1 : CATÉGORIE ============ -->
+<div class="screen" id="screen-cat">
+  <button class="back-btn" onclick="showScreen('screen-home')">Accueil</button>
+  <div id="progress-1"></div>
+  <div class="header">
+    <h1>Catégorie</h1>
+    <div class="subtitle">Choisissez le type de client</div>
+  </div>
+  <div class="btn-group" style="flex:1; align-content:center; gap:16px; grid-template-columns:1fr 1fr 1fr;">
+    <button class="btn btn-cat-homme btn-compact" style="font-size:20px;" onclick="selectCat('homme')">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      <span class="btn-label">HOMME</span>
+    </button>
+    <button class="btn btn-cat-femme btn-compact" style="font-size:20px;" onclick="selectCat('femme')">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      <span class="btn-label">FEMME</span>
+    </button>
+    <button class="btn btn-cat-enfant btn-compact" style="font-size:20px;" onclick="selectCat('enfant')">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      <span class="btn-label">ENFANT</span>
+    </button>
+  </div>
+</div>
+
+<!-- ============ ÉTAPE 2 : PRESTATION ============ -->
+<div class="screen" id="screen-presta">
+  <button class="back-btn" onclick="showScreen('screen-cat')">Catégorie</button>
+  <div id="progress-2"></div>
+  <div class="header">
+    <h1 id="presta-title">Prestation</h1>
+    <div class="subtitle">Choisissez la prestation réalisée</div>
+  </div>
+  <div class="scroll-area">
+    <div class="btn-group" id="presta-list" style="grid-template-columns:1fr;"></div>
+  </div>
+</div>
+
+<!-- ============ ÉTAPE 3 : PAIEMENT ============ -->
+<div class="screen" id="screen-pay">
+  <button class="back-btn" onclick="showScreen('screen-presta')">Prestation</button>
+  <div id="progress-3"></div>
+  <div class="header">
+    <h1>Mode de paiement</h1>
+    <div class="subtitle">Comment le client règle-t-il ?</div>
+  </div>
+  <div class="btn-group" style="flex:1; align-content:center; gap:16px; grid-template-columns:1fr 1fr 1fr;">
+    <button class="btn btn-primary btn-compact" style="font-size:20px;" onclick="selectPay('especes')">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/><line x1="6" y1="12" x2="6" y2="12.01"/><line x1="18" y1="12" x2="18" y2="12.01"/></svg>
+      <span class="btn-label">ESPÈCES</span>
+    </button>
+    <button class="btn btn-primary btn-compact" style="font-size:20px;" onclick="selectPay('cb')">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+      <span class="btn-label">CARTE BANCAIRE</span>
+    </button>
+    <button class="btn btn-primary btn-compact" style="font-size:20px;" onclick="selectPay('cheque')">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      <span class="btn-label">CHÈQUE</span>
+    </button>
+  </div>
+</div>
+
+<!-- ============ ÉTAPE 4 : CONFIRMATION ============ -->
+<div class="screen" id="screen-confirm">
+  <button class="back-btn" onclick="showScreen('screen-pay')">Paiement</button>
+  <div id="progress-4"></div>
+  <div class="header">
+    <h1>Confirmation</h1>
+    <div class="subtitle">Vérifiez les informations avant de valider</div>
+  </div>
+  <div class="card card-highlight" style="margin-top:8px;">
+    <div class="recap-row"><span class="recap-label">Catégorie</span><span class="recap-value" id="conf-cat"></span></div>
+    <div class="recap-row"><span class="recap-label">Prestation</span><span class="recap-value" id="conf-presta"></span></div>
+    <div class="recap-row"><span class="recap-label">Paiement</span><span class="recap-value" id="conf-pay"></span></div>
+    <div class="recap-total">
+      <span class="recap-total-label">Montant</span>
+      <span class="recap-total-amount" id="conf-montant"></span>
+    </div>
+  </div>
+  <div class="btn-group" style="margin-top:auto;">
+    <button class="btn btn-green btn-noSquare btn-full" style="min-height:80px; font-size:24px;" onclick="validerEncaissement()"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> VALIDER</button>
+    <button class="btn btn-red btn-noSquare btn-full" onclick="showScreen('screen-home')"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> ANNULER</button>
+  </div>
+</div>
+
+<!-- ============ FOND DE CAISSE ============ -->
+<div class="screen" id="screen-fond">
+  <button class="back-btn" onclick="showScreen('screen-home')">Accueil</button>
+  <div class="header">
+    <h1>Fond de caisse</h1>
+    <div class="subtitle" id="fond-date"></div>
+  </div>
+  <div class="card">
+    <div class="form-group">
+      <label class="form-label">Fond de caisse matin (€)</label>
+      <input type="number" step="0.01" min="0" class="form-input" id="fond-matin" placeholder="0,00" inputmode="decimal">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Dépenses espèces (€) — optionnel</label>
+      <input type="number" step="0.01" min="0" class="form-input" id="fond-depenses" placeholder="0,00" inputmode="decimal">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Total espèces du jour</label>
+      <div style="font-size:22px; font-weight:700; color:var(--primary); padding:8px 0;" id="fond-total-especes">0,00 €</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Fond de caisse soir (auto)</label>
+      <div style="font-size:32px; font-weight:700; color:var(--green); padding:8px 0; font-family:'Playfair Display',serif;" id="fond-soir-val">0,00 €</div>
+    </div>
+  </div>
+  <button class="btn btn-green btn-noSquare" onclick="saveFond()"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> ENREGISTRER</button>
+</div>
+
+<!-- ============ HISTORIQUE & EXPORT ============ -->
+<div class="screen" id="screen-histo">
+  <button class="back-btn" onclick="showScreen('screen-home')">Accueil</button>
+  <div class="header">
+    <h1>Historique &amp; Export</h1>
+  </div>
+  <div class="scroll-area">
+    <div class="card">
+      <div class="form-group">
+        <label class="form-label">Période</label>
+        <select class="form-input" id="filter-period" onchange="onPeriodChange()">
+          <option value="jour">Aujourd'hui</option>
+          <option value="semaine">Cette semaine</option>
+          <option value="mois" selected>Ce mois</option>
+          <option value="custom">Personnalisé</option>
+        </select>
+      </div>
+      <div id="custom-dates" style="display:none;">
+        <div class="btn-row">
+          <div class="form-group" style="flex:1;">
+            <label class="form-label">Du</label>
+            <input type="date" class="form-input" id="filter-start">
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label class="form-label">Au</label>
+            <input type="date" class="form-input" id="filter-end">
+          </div>
+        </div>
+      </div>
+      <div class="btn-row" style="margin-top:8px;">
+        <div class="form-group" style="flex:1;">
+          <label class="form-label">Catégorie</label>
+          <select class="form-input" id="filter-cat">
+            <option value="tous">Tous</option>
+            <option value="homme">Homme</option>
+            <option value="femme">Femme</option>
+            <option value="enfant">Enfant</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label class="form-label">Paiement</label>
+          <select class="form-input" id="filter-pay">
+            <option value="tous">Tous</option>
+            <option value="especes">Espèces</option>
+            <option value="cb">CB</option>
+            <option value="cheque">Chèque</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-small" onclick="applyFilters()">FILTRER</button>
+    </div>
+    <div id="histo-results"></div>
+    <div class="btn-group" style="margin-top:16px;">
+      <button class="btn btn-primary btn-noSquare" onclick="exportPDF()">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 12 15 15"/></svg> EXPORTER EN PDF
+      </button>
+      <button class="btn btn-outline btn-noSquare" onclick="sendEmail()">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22 6 12 13 2 6"/></svg> ENVOYER À LA COMPTABLE
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ GESTION TARIFS ============ -->
+<div class="screen" id="screen-tarifs-warn">
+  <button class="back-btn" onclick="showScreen('screen-home')">Accueil</button>
+  <div class="header">
+    <h1>Gestion des tarifs</h1>
+  </div>
+  <div class="alert">
+    <strong><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#92400E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:6px;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Attention</strong>
+    Vous êtes sur le point de modifier les tarifs de l'application. Toute modification sera immédiatement appliquée aux prochains encaissements. Les encaissements déjà enregistrés ne seront pas modifiés. Êtes-vous sûre de vouloir continuer ?
+  </div>
+  <div class="btn-group">
+    <button class="btn btn-primary btn-noSquare" onclick="showScreen('screen-tarifs')">CONTINUER</button>
+    <button class="btn btn-gray btn-noSquare" onclick="showScreen('screen-home')">ANNULER</button>
+  </div>
+</div>
+
+<div class="screen" id="screen-tarifs">
+  <button class="back-btn" onclick="showScreen('screen-home')">Accueil</button>
+  <div class="header">
+    <h1>Modifier les tarifs</h1>
+  </div>
+  <div class="scroll-area">
+    <div class="tabs">
+      <button class="tab active" onclick="showTarifTab('femme', this)">Femme</button>
+      <button class="tab" onclick="showTarifTab('homme', this)">Homme</button>
+      <button class="tab" onclick="showTarifTab('enfant', this)">Enfant</button>
+    </div>
+    <div id="tarifs-list"></div>
+    <button class="btn btn-outline btn-small" style="margin:12px 0;" onclick="addPrestation()">+ AJOUTER UNE PRESTATION</button>
+    <div class="btn-group" style="margin-top:16px;">
+      <button class="btn btn-green btn-noSquare btn-full" onclick="saveTarifs()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> ENREGISTRER LES MODIFICATIONS</button>
+      <button class="btn btn-gray btn-noSquare btn-full" onclick="resetTarifs()">RÉINITIALISER PAR DÉFAUT</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ PARAMÈTRES ============ -->
+<div class="screen" id="screen-settings">
+  <button class="back-btn" onclick="showScreen('screen-home')">Accueil</button>
+  <div class="header">
+    <h1>Paramètres</h1>
+  </div>
+  <div class="card">
+    <div class="form-group">
+      <label class="form-label">Nom du salon</label>
+      <input type="text" class="form-input" id="set-salon" placeholder="Natura Tif">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Nom de la gérante</label>
+      <input type="text" class="form-input" id="set-gerante" placeholder="Nom">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Email de la comptable</label>
+      <input type="email" class="form-input" id="set-email" placeholder="comptable@exemple.fr">
+    </div>
+  </div>
+  <button class="btn btn-green btn-noSquare" onclick="saveSettings()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> ENREGISTRER</button>
+
+  <div class="card" style="margin-top:20px;">
+    <div style="font-size:14px; font-weight:700; color:var(--primary); margin-bottom:4px;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      Synchronisation cloud (optionnel)
+    </div>
+    <div style="font-size:13px; color:var(--gray); margin-bottom:12px; line-height:1.5;">
+      Sauvegarde automatique sur internet. Nécessite un compte Supabase gratuit.<br>
+      <strong>Tableau requis :</strong> <code style="background:var(--gray-light);padding:2px 5px;border-radius:4px;font-size:11px;">transactions</code> avec les colonnes : id, date, heure, categorie, prestation, montant, paiement.
+    </div>
+    <div class="form-group">
+      <label class="form-label">URL Supabase</label>
+      <input type="url" class="form-input" id="set-sb-url" placeholder="https://xxx.supabase.co" inputmode="url" autocomplete="off" autocorrect="off">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Clé anonyme (anon key)</label>
+      <input type="text" class="form-input" id="set-sb-key" placeholder="eyJhbG..." autocomplete="off" autocorrect="off" style="font-size:12px;">
+    </div>
+    <div id="sync-test-result" style="font-size:13px;margin-top:8px;"></div>
+    <button class="btn btn-outline btn-small" style="margin-top:8px;" onclick="testAndSaveSync()">TESTER &amp; ACTIVER LA SYNC</button>
+  </div>
+</div>
+
+<script>
+// ==================== DATA ====================
+const DEFAULT_TARIFS = {
+  femme: [
+    { nom: "Shampoing + coupe + séchage cheveux courts", prix: 39 },
+    { nom: "Shampoing + coupe + brushing cheveux courts", prix: 34 },
+    { nom: "Shampoing + coupe + séchage cheveux longs", prix: 34 },
+    { nom: "Shampoing + coupe + brushing cheveux longs", prix: 36 },
+    { nom: "Coloration cheveux courts", prix: 21 },
+    { nom: "Coloration cheveux longs", prix: 26 },
+    { nom: "Permanente cheveux courts", prix: 27 },
+    { nom: "Permanente cheveux longs", prix: 38 },
+    { nom: "Mèches cheveux courts", prix: 32 },
+    { nom: "Mèches cheveux longs", prix: 42 },
+    { nom: "Brushing cheveux courts", prix: 22 },
+    { nom: "Brushing cheveux longs", prix: 27 }
+  ],
+  homme: [
+    { nom: "Shampoing + coupe", prix: 20 },
+    { nom: "Coupe sans shampoing", prix: 18 },
+    { nom: "Coupe tondeuse", prix: 12 }
+  ],
+  enfant: [
+    { nom: "0 à 6 ans", prix: 9.50 },
+    { nom: "7 à 11 ans garçon", prix: 11 },
+    { nom: "7 à 11 ans fille", prix: 13 },
+    { nom: "11 à 16 ans garçon", prix: 13 },
+    { nom: "11 à 16 ans fille", prix: 19 }
+  ]
+};
+
+const PAY_LABELS = { especes: "Espèces", cb: "Carte bancaire", cheque: "Chèque" };
+const CAT_LABELS = { homme: "Homme", femme: "Femme", enfant: "Enfant" };
+const CAT_ICONS = { homme: 'H', femme: 'F', enfant: 'E' };
+
+// ==================== STORAGE ====================
+function getJSON(key, def) { try { return JSON.parse(localStorage.getItem(key)) || def; } catch { return def; } }
+function setJSON(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
+function getTarifs() { return getJSON('nt_tarifs', JSON.parse(JSON.stringify(DEFAULT_TARIFS))); }
+function getTransactions() { return getJSON('nt_transactions', []); }
+function getFonds() { return getJSON('nt_fonds', {}); }
+function getSettings() { return getJSON('nt_settings', { salon: 'Natura Tif', gerante: '', email: '' }); }
+function uuid() { return Date.now().toString(36) + Math.random().toString(36).substr(2, 5); }
+function todayStr() { return new Date().toISOString().slice(0, 10); }
+function formatDate(d) { const [y, m, day] = d.split('-'); return `${day}/${m}/${y}`; }
+function formatMoney(v) { return Number(v).toFixed(2).replace('.', ',') + ' €'; }
+function nowTime() { const n = new Date(); return n.getHours().toString().padStart(2,'0') + ':' + n.getMinutes().toString().padStart(2,'0'); }
+function vibrate() { if (navigator.vibrate) navigator.vibrate(15); }
+
+// ==================== PROGRESS BAR ====================
+function renderProgress(containerId, step) {
+  const labels = ['Catégorie', 'Prestation', 'Paiement', 'Confirmer'];
+  let html = '<div class="progress-bar">';
+  for (let i = 0; i < 4; i++) {
+    const cls = i < step - 1 ? 'done' : i === step - 1 ? 'active' : '';
+    const icon = i < step - 1 ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' : (i + 1);
+    html += `<div class="progress-dot ${cls}">${icon}</div>`;
+    if (i < 3) html += `<div class="progress-line ${i < step - 1 ? 'done' : ''}"></div>`;
+  }
+  html += '</div>';
+  document.getElementById(containerId).innerHTML = html;
+}
+
+// ==================== NAVIGATION ====================
+let currentScreen = 'screen-home';
+function showScreen(id) {
+  vibrate();
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  const el = document.getElementById(id);
+  el.classList.add('active');
+  currentScreen = id;
+  if (id === 'screen-home') updateHome();
+  if (id === 'screen-fond') updateFond();
+  if (id === 'screen-histo') applyFilters();
+  if (id === 'screen-settings') loadSettings();
+  if (id === 'screen-cat') renderProgress('progress-1', 1);
+  if (id === 'screen-presta') renderProgress('progress-2', 2);
+  if (id === 'screen-pay') renderProgress('progress-3', 3);
+  if (id === 'screen-confirm') renderProgress('progress-4', 4);
+  window.scrollTo(0, 0);
+}
+
+// ==================== HOME ====================
+function updateHome() {
+  const today = todayStr();
+  const txs = getTransactions().filter(t => t.date === today);
+  const total = txs.reduce((s, t) => s + t.montant, 0);
+  document.getElementById('home-date').textContent = formatDate(today);
+  document.getElementById('home-total').textContent = formatMoney(total);
+  document.getElementById('home-count').textContent = txs.length;
+  renderMiniCharts(txs, total);
+  renderLastTx(txs);
+  updateSyncBadge();
+}
+
+function renderMiniCharts(txs, total) {
+  const container = document.getElementById('home-charts');
+  if (txs.length === 0) { container.innerHTML = ''; return; }
+
+  const tH = txs.filter(t => t.categorie === 'homme').reduce((s,t) => s + t.montant, 0);
+  const tF = txs.filter(t => t.categorie === 'femme').reduce((s,t) => s + t.montant, 0);
+  const tE = txs.filter(t => t.categorie === 'enfant').reduce((s,t) => s + t.montant, 0);
+  const tEsp = txs.filter(t => t.paiement === 'especes').reduce((s,t) => s + t.montant, 0);
+  const tCB = txs.filter(t => t.paiement === 'cb').reduce((s,t) => s + t.montant, 0);
+  const tCh = txs.filter(t => t.paiement === 'cheque').reduce((s,t) => s + t.montant, 0);
+  const max = Math.max(tH, tF, tE, tEsp, tCB, tCh, 1);
+
+  function bar(label, val, color) {
+    const pct = Math.round((val / max) * 100);
+    return `<div class="mini-bar-row">
+      <span class="mini-bar-label">${label}</span>
+      <div class="mini-bar-track"><div class="mini-bar-fill" style="width:${pct}%;background:${color};"></div></div>
+      <span class="mini-bar-val">${formatMoney(val)}</span>
+    </div>`;
+  }
+
+  container.innerHTML = `
+    <div class="mini-bar-group">
+      <div class="mb-title">Par catégorie</div>
+      ${bar('H', tH, 'var(--cat-homme)')}
+      ${bar('F', tF, 'var(--cat-femme)')}
+      ${bar('E', tE, 'var(--cat-enfant)')}
+    </div>
+    <div class="mini-bar-group">
+      <div class="mb-title">Par paiement</div>
+      ${bar('Esp', tEsp, '#7A9B2E')}
+      ${bar('CB', tCB, '#5B5723')}
+      ${bar('Ch', tCh, '#8B6B4A')}
+    </div>
+  `;
+}
+
+function renderLastTx(txs) {
+  const container = document.getElementById('last-tx-container');
+  if (txs.length === 0) { container.innerHTML = ''; return; }
+  const last = txs[txs.length - 1];
+  container.innerHTML = `
+    <div class="last-tx">
+      <div class="lt-info">
+        <div class="lt-label">Dernier encaissement — ${last.heure}</div>
+        <div class="lt-detail">${CAT_ICONS[last.categorie] || ''} ${last.prestation} — ${formatMoney(last.montant)} (${PAY_LABELS[last.paiement]})</div>
+      </div>
+      <button class="lt-cancel" onclick="cancelLastTx('${last.id}')">Annuler</button>
+    </div>
+  `;
+}
+
+function cancelLastTx(id) {
+  showModal('Annuler le dernier encaissement', 'Cette transaction sera supprimée. Continuer ?', () => {
+    let txs = getTransactions().filter(t => t.id !== id);
+    setJSON('nt_transactions', txs);
+    updateHome();
+  });
+}
+
+// ==================== ENCAISSEMENT FLOW ====================
+let encaissement = { categorie: '', prestation: '', montant: 0, paiement: '' };
+
+function startEncaissement() {
+  encaissement = { categorie: '', prestation: '', montant: 0, paiement: '' };
+  showScreen('screen-cat');
+}
+
+function selectCat(cat) {
+  vibrate();
+  encaissement.categorie = cat;
+  document.getElementById('presta-title').textContent = CAT_ICONS[cat] + ' Prestation — ' + CAT_LABELS[cat];
+  const tarifs = getTarifs();
+  const list = tarifs[cat] || [];
+  const container = document.getElementById('presta-list');
+  container.innerHTML = '';
+  list.forEach(p => {
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-service';
+    btn.innerHTML = `<span class="service-name">${p.nom}</span><span class="service-price">${formatMoney(p.prix)}</span>`;
+    btn.onclick = () => selectPresta(p.nom, p.prix);
+    container.appendChild(btn);
+  });
+  showScreen('screen-presta');
+}
+
+function selectPresta(nom, prix) {
+  vibrate();
+  encaissement.prestation = nom;
+  encaissement.montant = prix;
+  showScreen('screen-pay');
+}
+
+function selectPay(mode) {
+  vibrate();
+  encaissement.paiement = mode;
+  document.getElementById('conf-cat').textContent = CAT_ICONS[encaissement.categorie] + ' ' + CAT_LABELS[encaissement.categorie];
+  document.getElementById('conf-presta').textContent = encaissement.prestation;
+  document.getElementById('conf-pay').textContent = PAY_LABELS[mode];
+  document.getElementById('conf-montant').textContent = formatMoney(encaissement.montant);
+  showScreen('screen-confirm');
+}
+
+function validerEncaissement() {
+  vibrate();
+  const tx = {
+    id: uuid(),
+    date: todayStr(),
+    heure: nowTime(),
+    categorie: encaissement.categorie,
+    prestation: encaissement.prestation,
+    montant: encaissement.montant,
+    paiement: encaissement.paiement,
+    _synced: false
+  };
+  const txs = getTransactions();
+  txs.push(tx);
+  setJSON('nt_transactions', txs);
+  syncPending();
+  showFlash('Encaissement enregistré');
+}
+
+function showFlash(text) {
+  const flash = document.getElementById('flash');
+  flash.querySelector('.flash-text').textContent = text;
+  flash.classList.add('active');
+  if (navigator.vibrate) navigator.vibrate([15, 80, 15]);
+  setTimeout(() => {
+    flash.classList.remove('active');
+    showScreen('screen-home');
+  }, 1400);
+}
+
+// ==================== FOND DE CAISSE ====================
+function updateFond() {
+  const today = todayStr();
+  document.getElementById('fond-date').textContent = formatDate(today);
+  const fonds = getFonds();
+  const fond = fonds[today] || {};
+  document.getElementById('fond-matin').value = fond.fond_matin || '';
+  document.getElementById('fond-depenses').value = fond.depenses_especes || '';
+  calcFondSoir();
+}
+
+function calcFondSoir() {
+  const today = todayStr();
+  const matin = parseFloat(document.getElementById('fond-matin').value) || 0;
+  const depenses = parseFloat(document.getElementById('fond-depenses').value) || 0;
+  const txs = getTransactions().filter(t => t.date === today && t.paiement === 'especes');
+  const totalEspeces = txs.reduce((s, t) => s + t.montant, 0);
+  document.getElementById('fond-total-especes').textContent = formatMoney(totalEspeces);
+  const soir = matin + totalEspeces - depenses;
+  document.getElementById('fond-soir-val').textContent = formatMoney(soir);
+}
+document.addEventListener('input', function(e) {
+  if (e.target.id === 'fond-matin' || e.target.id === 'fond-depenses') calcFondSoir();
+});
+
+function saveFond() {
+  const today = todayStr();
+  const matin = parseFloat(document.getElementById('fond-matin').value) || 0;
+  const depenses = parseFloat(document.getElementById('fond-depenses').value) || 0;
+  const txs = getTransactions().filter(t => t.date === today && t.paiement === 'especes');
+  const totalEspeces = txs.reduce((s, t) => s + t.montant, 0);
+  const soir = matin + totalEspeces - depenses;
+  const fonds = getFonds();
+  fonds[today] = { date: today, fond_matin: matin, depenses_especes: depenses, fond_soir: soir };
+  setJSON('nt_fonds', fonds);
+  showFlash('Fond de caisse enregistré');
+}
+
+// ==================== HISTORIQUE ====================
+function onPeriodChange() {
+  document.getElementById('custom-dates').style.display = document.getElementById('filter-period').value === 'custom' ? 'block' : 'none';
+}
+
+function getFilterDates() {
+  const period = document.getElementById('filter-period').value;
+  const today = new Date();
+  let start, end;
+  if (period === 'jour') {
+    start = end = todayStr();
+  } else if (period === 'semaine') {
+    const d = new Date(today);
+    const day = d.getDay() || 7;
+    d.setDate(d.getDate() - day + 1);
+    start = d.toISOString().slice(0, 10);
+    end = todayStr();
+  } else if (period === 'mois') {
+    start = today.toISOString().slice(0, 8) + '01';
+    end = todayStr();
+  } else {
+    start = document.getElementById('filter-start').value || todayStr();
+    end = document.getElementById('filter-end').value || todayStr();
+  }
+  return { start, end };
+}
+
+let lastFiltered = [];
+
+function applyFilters() {
+  const { start, end } = getFilterDates();
+  const cat = document.getElementById('filter-cat').value;
+  const pay = document.getElementById('filter-pay').value;
+  let txs = getTransactions().filter(t => t.date >= start && t.date <= end);
+  if (cat !== 'tous') txs = txs.filter(t => t.categorie === cat);
+  if (pay !== 'tous') txs = txs.filter(t => t.paiement === pay);
+  txs.sort((a, b) => (b.date + b.heure).localeCompare(a.date + a.heure));
+  lastFiltered = txs;
+  renderHisto(txs, start, end);
+}
+
+function renderHisto(txs, start, end) {
+  const container = document.getElementById('histo-results');
+  if (txs.length === 0) {
+    container.innerHTML = '<div class="card" style="text-align:center;color:var(--gray);padding:40px;font-size:16px;">Aucune transaction pour cette période</div>';
+    return;
+  }
+  const totalGen = txs.reduce((s, t) => s + t.montant, 0);
+  const totalEspeces = txs.filter(t => t.paiement === 'especes').reduce((s, t) => s + t.montant, 0);
+  const totalCB = txs.filter(t => t.paiement === 'cb').reduce((s, t) => s + t.montant, 0);
+  const totalCheque = txs.filter(t => t.paiement === 'cheque').reduce((s, t) => s + t.montant, 0);
+  const totalHomme = txs.filter(t => t.categorie === 'homme').reduce((s, t) => s + t.montant, 0);
+  const totalFemme = txs.filter(t => t.categorie === 'femme').reduce((s, t) => s + t.montant, 0);
+  const totalEnfant = txs.filter(t => t.categorie === 'enfant').reduce((s, t) => s + t.montant, 0);
+
+  let html = '<div class="totals-grid">';
+  html += `<div class="total-card"><div class="tc-label">Femme</div><div class="tc-value">${formatMoney(totalFemme)}</div></div>`;
+  html += `<div class="total-card"><div class="tc-label">Homme</div><div class="tc-value">${formatMoney(totalHomme)}</div></div>`;
+  html += `<div class="total-card"><div class="tc-label">Enfant</div><div class="tc-value">${formatMoney(totalEnfant)}</div></div>`;
+  html += `<div class="total-card"><div class="tc-label">${txs.length} encaiss.</div><div class="tc-value"></div></div>`;
+  html += `<div class="total-card"><div class="tc-label">Espèces</div><div class="tc-value">${formatMoney(totalEspeces)}</div></div>`;
+  html += `<div class="total-card"><div class="tc-label">CB</div><div class="tc-value">${formatMoney(totalCB)}</div></div>`;
+  html += `<div class="total-card"><div class="tc-label">Chèque</div><div class="tc-value">${formatMoney(totalCheque)}</div></div>`;
+  html += `<div class="total-card full"><div class="tc-label">Total général</div><div class="tc-value">${formatMoney(totalGen)}</div></div>`;
+  html += '</div>';
+
+  const fonds = getFonds();
+  if (start === end && fonds[start]) {
+    const f = fonds[start];
+    html += '<div class="card"><strong>Fond de caisse</strong>';
+    html += `<div class="recap-row"><span class="recap-label">Matin</span><span class="recap-value">${formatMoney(f.fond_matin)}</span></div>`;
+    html += `<div class="recap-row"><span class="recap-label">Dépenses</span><span class="recap-value">${formatMoney(f.depenses_especes)}</span></div>`;
+    html += `<div class="recap-row"><span class="recap-label">Soir</span><span class="recap-value">${formatMoney(f.fond_soir)}</span></div>`;
+    html += '</div>';
+  }
+
+  html += '<div class="table-wrap"><table><thead><tr><th>Date</th><th>Heure</th><th>Cat.</th><th>Prestation</th><th>Montant</th><th>Paiem.</th><th></th></tr></thead><tbody>';
+  txs.forEach(t => {
+    html += `<tr>
+      <td>${formatDate(t.date)}</td>
+      <td>${t.heure}</td>
+      <td>${CAT_ICONS[t.categorie] || ''}</td>
+      <td>${t.prestation}</td>
+      <td style="font-weight:700;">${formatMoney(t.montant)}</td>
+      <td>${PAY_LABELS[t.paiement] || t.paiement}</td>
+      <td><span class="delete-tx" onclick="deleteTx('${t.id}')">Suppr.</span></td>
+    </tr>`;
+  });
+  html += '</tbody></table></div>';
+  container.innerHTML = html;
+}
+
+function deleteTx(id) {
+  showModal('Supprimer', 'Voulez-vous supprimer cet encaissement ?', () => {
+    let txs = getTransactions().filter(t => t.id !== id);
+    setJSON('nt_transactions', txs);
+    applyFilters();
+  });
+}
+
+// ==================== EXPORT PDF ====================
+function exportPDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  const settings = getSettings();
+  const { start, end } = getFilterDates();
+  const txs = lastFiltered;
+
+  doc.setFontSize(20);
+  doc.setTextColor(91, 87, 35);
+  doc.text(settings.salon || 'Natura Tif', 105, 20, { align: 'center' });
+  doc.setFontSize(11);
+  doc.setTextColor(100);
+  doc.text('Salon de coiffure — Laroquebrou', 105, 27, { align: 'center' });
+  doc.setFontSize(12);
+  doc.setTextColor(0);
+  doc.text(`Période : ${formatDate(start)} au ${formatDate(end)}`, 14, 38);
+  if (settings.gerante) doc.text(`Gérante : ${settings.gerante}`, 14, 45);
+
+  const totalGen = txs.reduce((s, t) => s + t.montant, 0);
+  const totalEspeces = txs.filter(t => t.paiement === 'especes').reduce((s, t) => s + t.montant, 0);
+  const totalCB = txs.filter(t => t.paiement === 'cb').reduce((s, t) => s + t.montant, 0);
+  const totalCheque = txs.filter(t => t.paiement === 'cheque').reduce((s, t) => s + t.montant, 0);
+  const totalHomme = txs.filter(t => t.categorie === 'homme').reduce((s, t) => s + t.montant, 0);
+  const totalFemme = txs.filter(t => t.categorie === 'femme').reduce((s, t) => s + t.montant, 0);
+  const totalEnfant = txs.filter(t => t.categorie === 'enfant').reduce((s, t) => s + t.montant, 0);
+
+  let y = settings.gerante ? 55 : 50;
+  doc.setFontSize(13);
+  doc.setTextColor(91, 87, 35);
+  doc.text('Récapitulatif', 14, y); y += 8;
+  doc.setFontSize(10);
+  doc.setTextColor(0);
+  doc.text(`Total général : ${formatMoney(totalGen)}  |  ${txs.length} encaissement(s)`, 14, y); y += 6;
+  doc.text(`Femme : ${formatMoney(totalFemme)}  |  Homme : ${formatMoney(totalHomme)}  |  Enfant : ${formatMoney(totalEnfant)}`, 14, y); y += 6;
+  doc.text(`Espèces : ${formatMoney(totalEspeces)}  |  CB : ${formatMoney(totalCB)}  |  Chèque : ${formatMoney(totalCheque)}`, 14, y); y += 4;
+
+  const fonds = getFonds();
+  if (start === end && fonds[start]) {
+    const f = fonds[start]; y += 6;
+    doc.text(`Fond de caisse — Matin : ${formatMoney(f.fond_matin)} | Dépenses : ${formatMoney(f.depenses_especes)} | Soir : ${formatMoney(f.fond_soir)}`, 14, y); y += 4;
+  }
+  y += 6;
+  const rows = txs.map(t => [formatDate(t.date), t.heure, CAT_LABELS[t.categorie] || t.categorie, t.prestation, formatMoney(t.montant), PAY_LABELS[t.paiement] || t.paiement]);
+  doc.autoTable({
+    startY: y,
+    head: [['Date', 'Heure', 'Cat.', 'Prestation', 'Montant', 'Paiement']],
+    body: rows,
+    styles: { fontSize: 9 },
+    headStyles: { fillColor: [91, 87, 35] },
+    alternateRowStyles: { fillColor: [242, 240, 232] }
+  });
+  doc.save(`${(settings.salon || 'NaturaTif').replace(/\s/g, '_')}_${start}_${end}.pdf`);
+}
+
+// ==================== EMAIL ====================
+function sendEmail() {
+  const settings = getSettings();
+  const { start, end } = getFilterDates();
+  const txs = lastFiltered;
+  const totalGen = txs.reduce((s, t) => s + t.montant, 0);
+  const totalEspeces = txs.filter(t => t.paiement === 'especes').reduce((s, t) => s + t.montant, 0);
+  const totalCB = txs.filter(t => t.paiement === 'cb').reduce((s, t) => s + t.montant, 0);
+  const totalCheque = txs.filter(t => t.paiement === 'cheque').reduce((s, t) => s + t.montant, 0);
+  const moisNoms = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+  const d = new Date(start);
+  const moisAnnee = moisNoms[d.getMonth()] + ' ' + d.getFullYear();
+  const subject = encodeURIComponent(`${settings.salon || 'Natura Tif'} — Récapitulatif ${moisAnnee}`);
+  let body = `${settings.salon || 'Natura Tif'} — Récapitulatif ${moisAnnee}\n\n`;
+  body += `Période : ${formatDate(start)} au ${formatDate(end)}\n`;
+  body += `Nombre d'encaissements : ${txs.length}\n\n`;
+  body += `TOTAL GÉNÉRAL : ${formatMoney(totalGen)}\n\n`;
+  body += `Espèces : ${formatMoney(totalEspeces)}\nCarte bancaire : ${formatMoney(totalCB)}\nChèque : ${formatMoney(totalCheque)}\n\n`;
+  body += `---\nVeuillez trouver le détail en pièce jointe (PDF).\nPensez à exporter le PDF depuis l'application et à le joindre à cet email.\n`;
+  if (settings.gerante) body += `\nCordialement,\n${settings.gerante}`;
+  window.location.href = `mailto:${settings.email || ''}?subject=${subject}&body=${encodeURIComponent(body)}`;
+}
+
+// ==================== TARIFS ====================
+let tarifTab = 'femme';
+let editTarifs = null;
+
+function showTarifs() { showScreen('screen-tarifs-warn'); }
+
+function showTarifTab(cat, btn) {
+  tarifTab = cat;
+  document.querySelectorAll('#screen-tarifs .tab').forEach(t => t.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderTarifs();
+}
+
+function renderTarifs() {
+  if (!editTarifs) editTarifs = JSON.parse(JSON.stringify(getTarifs()));
+  const list = editTarifs[tarifTab] || [];
+  const container = document.getElementById('tarifs-list');
+  container.innerHTML = '';
+  list.forEach((p, i) => {
+    const row = document.createElement('div');
+    row.className = 'tarif-row';
+    row.innerHTML = `
+      <input type="text" class="form-input" value="${p.nom}" onchange="editTarifs['${tarifTab}'][${i}].nom=this.value">
+      <input type="number" step="0.5" min="0" class="form-input price-input" value="${p.prix}" inputmode="decimal" onchange="editTarifs['${tarifTab}'][${i}].prix=parseFloat(this.value)||0">
+      <button class="btn btn-red btn-icon-only btn-small" onclick="removePresta(${i})"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    `;
+    container.appendChild(row);
+  });
+}
+
+function addPrestation() {
+  if (!editTarifs) editTarifs = JSON.parse(JSON.stringify(getTarifs()));
+  if (!editTarifs[tarifTab]) editTarifs[tarifTab] = [];
+  editTarifs[tarifTab].push({ nom: 'Nouvelle prestation', prix: 0 });
+  renderTarifs();
+  const container = document.getElementById('tarifs-list');
+  container.lastElementChild.querySelector('input').focus();
+  container.lastElementChild.querySelector('input').select();
+}
+
+function removePresta(i) {
+  showModal('Supprimer', 'Supprimer cette prestation ?', () => {
+    editTarifs[tarifTab].splice(i, 1);
+    renderTarifs();
+  });
+}
+
+function saveTarifs() {
+  setJSON('nt_tarifs', editTarifs);
+  editTarifs = null;
+  showFlash('Tarifs enregistrés');
+}
+
+function resetTarifs() {
+  showModal('Réinitialiser', 'Remettre tous les tarifs par défaut ? Cette action est irréversible.', () => {
+    editTarifs = JSON.parse(JSON.stringify(DEFAULT_TARIFS));
+    renderTarifs();
+  });
+}
+
+// ==================== SETTINGS ====================
+function loadSettings() {
+  const s = getSettings();
+  document.getElementById('set-salon').value = s.salon || '';
+  document.getElementById('set-gerante').value = s.gerante || '';
+  document.getElementById('set-email').value = s.email || '';
+  const cfg = getSyncConfig();
+  document.getElementById('set-sb-url').value = cfg.url || '';
+  document.getElementById('set-sb-key').value = cfg.key || '';
+  document.getElementById('sync-test-result').textContent = '';
+}
+
+function saveSettings() {
+  const s = {
+    salon: document.getElementById('set-salon').value.trim() || 'Natura Tif',
+    gerante: document.getElementById('set-gerante').value.trim(),
+    email: document.getElementById('set-email').value.trim()
+  };
+  setJSON('nt_settings', s);
+  document.getElementById('brand-name').textContent = s.salon;
+  showFlash('Paramètres enregistrés');
+}
+
+// ==================== SYNC ====================
+let _sbClient = null;
+
+function getSyncConfig() { return getJSON('nt_sync_config', { url: '', key: '' }); }
+function setSyncConfig(cfg) { setJSON('nt_sync_config', cfg); }
+
+function getSbClient() {
+  const cfg = getSyncConfig();
+  if (!cfg.url || !cfg.key) return null;
+  if (_sbClient) return _sbClient;
+  try {
+    _sbClient = window.supabase.createClient(cfg.url, cfg.key);
+    return _sbClient;
+  } catch(e) { return null; }
+}
+
+let _syncStatusText = '';
+
+function updateSyncBadge() {
+  const floatEl = document.getElementById('sync-float');
+  const cfg = getSyncConfig();
+  let cls = 'sf-unconfigured';
+  let text = 'Synchronisation non configurée. Allez dans Paramètres pour activer.';
+
+  if (!cfg.url || !cfg.key) {
+    cls = 'sf-unconfigured';
+    text = 'Synchronisation non configurée.';
+  } else if (!navigator.onLine) {
+    cls = 'sf-offline';
+    text = 'Hors ligne — les données sont sauvegardées localement et seront synchronisées au retour du réseau.';
+  } else {
+    const pending = getTransactions().filter(t => !t._synced).length;
+    if (pending > 0) {
+      cls = 'sf-pending';
+      text = `${pending} encaissement${pending > 1 ? 's' : ''} en attente de synchronisation…`;
+    } else {
+      cls = 'sf-ok';
+      text = 'Toutes les données sont synchronisées.';
+    }
+  }
+  if (floatEl) floatEl.className = 'sync-floating ' + cls;
+  _syncStatusText = text;
+  // Update tooltip if visible
+  const tip = document.getElementById('sync-tooltip');
+  if (tip && tip.classList.contains('visible')) tip.textContent = text;
+}
+
+let _syncTooltipTimer = null;
+function toggleSyncTooltip() {
+  vibrate();
+  const tip = document.getElementById('sync-tooltip');
+  if (!tip) return;
+  if (tip.classList.contains('visible')) {
+    tip.classList.remove('visible');
+    return;
+  }
+  tip.textContent = _syncStatusText;
+  tip.classList.add('visible');
+  clearTimeout(_syncTooltipTimer);
+  _syncTooltipTimer = setTimeout(() => tip.classList.remove('visible'), 4000);
+}
+
+// Close tooltip on tap elsewhere
+document.addEventListener('click', function(e) {
+  const tip = document.getElementById('sync-tooltip');
+  const float = document.getElementById('sync-float');
+  if (tip && !float.contains(e.target) && !tip.contains(e.target)) {
+    tip.classList.remove('visible');
+  }
+});
+
+async function syncPending() {
+  const sb = getSbClient();
+  if (!sb || !navigator.onLine) { updateSyncBadge(); return; }
+  const txs = getTransactions();
+  const pending = txs.filter(t => !t._synced);
+  if (pending.length === 0) { updateSyncBadge(); return; }
+
+  const badge = document.getElementById('sync-badge');
+  const label = document.getElementById('sync-label');
+  if (badge) badge.className = 'sync-status sync-syncing';
+  if (label) label.textContent = 'Synchronisation…';
+
+  try {
+    const rows = pending.map(t => ({
+      id: t.id, date: t.date, heure: t.heure,
+      categorie: t.categorie, prestation: t.prestation,
+      montant: t.montant, paiement: t.paiement
+    }));
+    const { error } = await sb.from('transactions').upsert(rows, { onConflict: 'id' });
+    if (!error) {
+      txs.forEach(t => { t._synced = true; });
+      setJSON('nt_transactions', txs);
+    }
+  } catch(e) {}
+  updateSyncBadge();
+}
+
+async function testAndSaveSync() {
+  const url = document.getElementById('set-sb-url').value.trim();
+  const key = document.getElementById('set-sb-key').value.trim();
+  const res = document.getElementById('sync-test-result');
+  if (!url || !key) { res.style.color = 'var(--red)'; res.textContent = 'Veuillez renseigner l\'URL et la clé.'; return; }
+  res.style.color = 'var(--gray)'; res.textContent = 'Test en cours…';
+  try {
+    _sbClient = null;
+    const client = window.supabase.createClient(url, key);
+    const { error } = await client.from('transactions').select('id').limit(1);
+    if (error && error.code !== 'PGRST116') throw error;
+    setSyncConfig({ url, key });
+    _sbClient = client;
+    res.style.color = 'var(--green)'; res.textContent = '✓ Connexion réussie ! Synchronisation activée.';
+    updateSyncBadge();
+    syncPending();
+  } catch(e) {
+    res.style.color = 'var(--red)';
+    res.textContent = 'Erreur : ' + (e.message || 'Connexion impossible. Vérifiez l\'URL et la clé.');
+  }
+}
+
+// ==================== MODAL ====================
+let modalCallback = null;
+function showModal(title, text, onConfirm) {
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-text').textContent = text;
+  modalCallback = onConfirm;
+  document.getElementById('modal').classList.add('active');
+}
+function closeModal() { document.getElementById('modal').classList.remove('active'); modalCallback = null; }
+document.getElementById('modal-confirm').onclick = function() { if (modalCallback) modalCallback(); closeModal(); };
+
+// ==================== MIGRATION NOMS ====================
+function migrateNames() {
+  const renames = {
+    "Shpg + coupe + séchage courts": "Shampoing + coupe + séchage cheveux courts",
+    "Shpg + coupe + brushing courts": "Shampoing + coupe + brushing cheveux courts",
+    "Shpg + coupe + séchage longs": "Shampoing + coupe + séchage cheveux longs",
+    "Shpg + coupe + brushing longs": "Shampoing + coupe + brushing cheveux longs",
+    "Brushing courts": "Brushing cheveux courts",
+    "Brushing longs": "Brushing cheveux longs",
+    "Shpg + coupe": "Shampoing + coupe",
+    "Coupe sans shpg": "Coupe sans shampoing"
+  };
+  const tarifs = getTarifs();
+  let changed = false;
+  for (const cat of Object.keys(tarifs)) {
+    for (const p of tarifs[cat]) {
+      if (renames[p.nom]) { p.nom = renames[p.nom]; changed = true; }
+    }
+  }
+  if (changed) setJSON('nt_tarifs', tarifs);
+
+  // Aussi renommer dans l'historique des transactions
+  const txs = getTransactions();
+  let txChanged = false;
+  for (const t of txs) {
+    if (renames[t.prestation]) { t.prestation = renames[t.prestation]; txChanged = true; }
+  }
+  if (txChanged) setJSON('nt_transactions', txs);
+}
+
+// ==================== INIT ====================
+function init() {
+  if (!localStorage.getItem('nt_tarifs')) setJSON('nt_tarifs', JSON.parse(JSON.stringify(DEFAULT_TARIFS)));
+  migrateNames();
+  // Auto-configure Supabase sync if not already set
+  if (!getSyncConfig().url) {
+    setSyncConfig({
+      url: 'https://rgwsqufbdimryxqefvhx.supabase.co',
+      key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJnd3NxdWZiZGltcnl4cWVmdmh4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5NTI4OTQsImV4cCI6MjA5MDUyODg5NH0.VNIY3iq3WZz-SVveQdMMqNth2ZmBP7aoJJ3PhfsmN-0'
+    });
+  }
+  const s = getSettings();
+  document.getElementById('brand-name').textContent = s.salon || 'Natura Tif';
+  updateHome();
+  updateSyncBadge();
+  // Auto-sync when internet is restored
+  window.addEventListener('online', () => { updateSyncBadge(); syncPending(); });
+  window.addEventListener('offline', () => { updateSyncBadge(); });
+  // Initial sync if online and config exists
+  if (navigator.onLine) syncPending();
+}
+
+init();
+</script>
+</body>
+</html>
