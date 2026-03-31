@@ -8,31 +8,9 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#5B5723">
 <title>Natura Tif — Caisse</title>
-<!-- PWA Manifest inline -->
+<!-- PWA Manifest -->
+<link rel="manifest" href="./manifest.json">
 <script>
-const manifest = {
-  "name": "Natura Tif — Caisse",
-  "short_name": "Natura Tif",
-  "description": "Application de caisse du salon Natura Tif",
-  "start_url": "./index.html",
-  "display": "standalone",
-  "orientation": "portrait",
-  "background_color": "#FAF8F2",
-  "theme_color": "#5B5723",
-  "icons": [{
-    "src": "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192"><rect width="192" height="192" rx="32" fill="#5B5723"/><text x="96" y="78" font-family="serif" font-size="48" font-weight="bold" fill="#FAF8F2" text-anchor="middle">Natura</text><text x="96" y="128" font-family="serif" font-size="48" font-weight="bold" fill="#A3B835" text-anchor="middle">Tif</text></svg>'),
-    "sizes": "192x192",
-    "type": "image/svg+xml",
-    "purpose": "any maskable"
-  }]
-};
-const blob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
-const manifestURL = URL.createObjectURL(blob);
-const link = document.createElement('link');
-link.rel = 'manifest';
-link.href = manifestURL;
-document.head.appendChild(link);
-
 // Register Service Worker for offline PWA
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(() => {});
