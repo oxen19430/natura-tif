@@ -1648,7 +1648,7 @@ function confirmMonnaie() {
 
 function showConfirmScreen() {
   document.getElementById('conf-date').value = todayStr();
-  document.getElementById('conf-cat').textContent = CAT_ICONS[encaissement.categorie] + ' ' + CAT_LABELS[encaissement.categorie];
+  document.getElementById('conf-cat').textContent = CAT_LABELS[encaissement.categorie];
   document.getElementById('conf-pay').textContent = PAY_LABELS[encaissement.paiement];
   // Build prestations list
   const listEl = document.getElementById('conf-prestas-list');
