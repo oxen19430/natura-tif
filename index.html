@@ -427,6 +427,47 @@ body::after {
 .presta-validate.visible { display: block; }
 .presta-validate:active { background: #15803d; transform: scale(0.98); }
 
+/* ===== Product buttons ===== */
+.btn-produit {
+  text-align: left;
+  justify-content: space-between;
+  flex-direction: row;
+  background: #FDFCF8;
+  border: 2px solid var(--border);
+  color: #2D2A1E;
+  aspect-ratio: auto;
+  min-height: 60px;
+  box-shadow: 0 1px 4px rgba(60,55,20,0.04);
+  position: relative;
+}
+.btn-produit:active { border-color: #D97706; background: #FFFBEB; transform: scale(0.98); }
+.btn-produit.selected { background: #D97706; border-color: #B45309; color: white; }
+.btn-produit.selected .service-price { color: white; }
+.btn-produit.selected::after {
+  content: '✓';
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 22px;
+  font-weight: 700;
+  color: white;
+}
+.skip-produits-btn {
+  width: 100%;
+  padding: 14px;
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--gray);
+  font-size: 16px;
+  font-weight: 600;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  margin-top: 8px;
+}
+.skip-produits-btn:active { background: var(--gray-light); }
+
 /* ===== Recap ===== */
 .recap-row { display: flex; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid var(--border); font-size: 18px; }
 .recap-row:last-child { border-bottom: none; }
@@ -736,9 +777,13 @@ tr:nth-child(even) { background: var(--gray-light); }
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>
       <span class="btn-label">HISTORIQUE &amp; EXPORT</span>
     </button>
-    <button class="btn btn-outline btn-full btn-noSquare" onclick="showTarifs()" style="min-height:56px;">
+    <button class="btn btn-outline btn-compact" onclick="showTarifs()">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-      <span>GÉRER LES TARIFS</span>
+      <span class="btn-label">TARIFS</span>
+    </button>
+    <button class="btn btn-outline btn-compact" onclick="showProduits()">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+      <span class="btn-label">PRODUITS</span>
     </button>
   </div>
 </div>
@@ -787,10 +832,32 @@ tr:nth-child(even) { background: var(--gray-light); }
   </div>
 </div>
 
-<!-- ============ ÉTAPE 3 : PAIEMENT ============ -->
-<div class="screen" id="screen-pay">
-  <button class="back-btn" onclick="showScreen('screen-presta')">Prestation</button>
+<!-- ============ ÉTAPE 3 : PRODUITS (optionnel) ============ -->
+<div class="screen" id="screen-produits">
+  <button class="back-btn" onclick="showScreen('screen-presta')">Prestations</button>
   <div id="progress-3"></div>
+  <div class="header">
+    <h1>Produits</h1>
+    <div class="subtitle">Ajouter des produits vendus (optionnel)</div>
+  </div>
+  <div class="scroll-area" style="padding-bottom:180px;">
+    <div class="btn-group" id="produits-list" style="grid-template-columns:1fr;"></div>
+    <div id="no-produits-msg" style="text-align:center;color:var(--gray);padding:30px;font-size:15px;display:none;">Aucun produit configuré.<br>Ajoutez des produits dans le menu de gestion.</div>
+  </div>
+  <div style="position:sticky; bottom:0; background:#FAF8F2; padding:8px 20px 16px; margin:0 -20px;">
+    <div class="presta-recap" id="produits-recap">
+      <div class="presta-recap-items" id="produits-recap-items"></div>
+      <div class="presta-recap-total"><span>Produits</span><span id="produits-recap-total">0,00 €</span></div>
+    </div>
+    <button class="skip-produits-btn" onclick="skipProduits()">PASSER — Aucun produit</button>
+    <button class="presta-validate" id="produits-validate" onclick="validateProduits()">CONTINUER AVEC LES PRODUITS</button>
+  </div>
+</div>
+
+<!-- ============ ÉTAPE 4 : PAIEMENT ============ -->
+<div class="screen" id="screen-pay">
+  <button class="back-btn" onclick="showScreen('screen-produits')">Produits</button>
+  <div id="progress-4"></div>
   <div class="header">
     <h1>Mode de paiement</h1>
     <div class="subtitle">Comment le client règle-t-il ?</div>
@@ -811,10 +878,10 @@ tr:nth-child(even) { background: var(--gray-light); }
   </div>
 </div>
 
-<!-- ============ ÉTAPE 4 : CONFIRMATION ============ -->
+<!-- ============ ÉTAPE 5 : CONFIRMATION ============ -->
 <div class="screen" id="screen-confirm">
   <button class="back-btn" onclick="showScreen('screen-pay')">Paiement</button>
-  <div id="progress-4"></div>
+  <div id="progress-5"></div>
   <div class="header">
     <h1>Confirmation</h1>
     <div class="subtitle">Vérifiez les informations avant de valider</div>
@@ -823,6 +890,7 @@ tr:nth-child(even) { background: var(--gray-light); }
     <div class="recap-row"><span class="recap-label">Catégorie</span><span class="recap-value" id="conf-cat"></span></div>
     <div class="recap-row"><span class="recap-label">Paiement</span><span class="recap-value" id="conf-pay"></span></div>
     <div id="conf-prestas-list"></div>
+    <div id="conf-produits-list"></div>
     <div class="recap-total">
       <span class="recap-total-label">Montant total</span>
       <span class="recap-total-amount" id="conf-montant"></span>
@@ -948,6 +1016,37 @@ tr:nth-child(even) { background: var(--gray-light); }
   </div>
 </div>
 
+<!-- ============ GESTION PRODUITS ============ -->
+<div class="screen" id="screen-produits-warn">
+  <button class="back-btn" onclick="showScreen('screen-home')">Accueil</button>
+  <div class="header">
+    <h1>Gestion des produits</h1>
+  </div>
+  <div class="alert">
+    <strong><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#92400E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:6px;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Attention</strong>
+    Vous êtes sur le point de modifier la liste des produits. Toute modification sera immédiatement appliquée aux prochains encaissements.
+  </div>
+  <div class="btn-group">
+    <button class="btn btn-primary btn-noSquare" onclick="showScreen('screen-produits-edit')">CONTINUER</button>
+    <button class="btn btn-gray btn-noSquare" onclick="showScreen('screen-home')">ANNULER</button>
+  </div>
+</div>
+
+<div class="screen" id="screen-produits-edit">
+  <button class="back-btn" onclick="showScreen('screen-home')">Accueil</button>
+  <div class="header">
+    <h1>Modifier les produits</h1>
+  </div>
+  <div class="scroll-area">
+    <div id="produits-edit-list"></div>
+    <button class="btn btn-outline btn-small" style="margin:12px 0;" onclick="addProduit()">+ AJOUTER UN PRODUIT</button>
+    <div class="btn-group" style="margin-top:16px;">
+      <button class="btn btn-green btn-noSquare btn-full" onclick="saveProduitsList()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> ENREGISTRER LES MODIFICATIONS</button>
+      <button class="btn btn-gray btn-noSquare btn-full" onclick="resetProduitsList()">SUPPRIMER TOUS LES PRODUITS</button>
+    </div>
+  </div>
+</div>
+
 <!-- ============ PARAMÈTRES ============ -->
 <div class="screen" id="screen-settings">
   <button class="back-btn" onclick="showScreen('screen-home')">Accueil</button>
@@ -1046,6 +1145,7 @@ const CAT_ICONS = { homme: 'H', femme: 'F', enfant: 'E' };
 function getJSON(key, def) { try { return JSON.parse(localStorage.getItem(key)) || def; } catch { return def; } }
 function setJSON(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
 function getTarifs() { return getJSON('nt_tarifs', JSON.parse(JSON.stringify(DEFAULT_TARIFS))); }
+function getProduits() { return getJSON('nt_produits', []); }
 function getTransactions() { return getJSON('nt_transactions', []); }
 function getFonds() { return getJSON('nt_fonds', {}); }
 function getSettings() { return getJSON('nt_settings', { salon: 'Natura Tif', gerante: '', email: '' }); }
@@ -1059,13 +1159,13 @@ function vibrate() { if (navigator.vibrate) navigator.vibrate(15); }
 
 // ==================== PROGRESS BAR ====================
 function renderProgress(containerId, step) {
-  const labels = ['Catégorie', 'Prestation', 'Paiement', 'Confirmer'];
+  const total = 5;
   let html = '<div class="progress-bar">';
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < total; i++) {
     const cls = i < step - 1 ? 'done' : i === step - 1 ? 'active' : '';
     const icon = i < step - 1 ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' : (i + 1);
     html += `<div class="progress-dot ${cls}">${icon}</div>`;
-    if (i < 3) html += `<div class="progress-line ${i < step - 1 ? 'done' : ''}"></div>`;
+    if (i < total - 1) html += `<div class="progress-line ${i < step - 1 ? 'done' : ''}"></div>`;
   }
   html += '</div>';
   document.getElementById(containerId).innerHTML = html;
@@ -1085,8 +1185,10 @@ function showScreen(id) {
   if (id === 'screen-settings') loadSettings();
   if (id === 'screen-cat') renderProgress('progress-1', 1);
   if (id === 'screen-presta') renderProgress('progress-2', 2);
-  if (id === 'screen-pay') renderProgress('progress-3', 3);
-  if (id === 'screen-confirm') renderProgress('progress-4', 4);
+  if (id === 'screen-produits') renderProgress('progress-3', 3);
+  if (id === 'screen-pay') renderProgress('progress-4', 4);
+  if (id === 'screen-confirm') renderProgress('progress-5', 5);
+  if (id === 'screen-produits-edit') renderProduitsEdit();
   window.scrollTo(0, 0);
 }
 
@@ -1148,8 +1250,13 @@ function renderLastTx(txs) {
   const sessionId = last.session_id;
   const sessionTxs = sessionId ? txs.filter(t => t.session_id === sessionId) : [last];
   const total = sessionTxs.reduce((s, t) => s + t.montant, 0);
+  const nbPrestas = sessionTxs.filter(t => (t.type || 'prestation') === 'prestation').length;
+  const nbProduits = sessionTxs.filter(t => t.type === 'produit').length;
+  let detailParts = [];
+  if (nbPrestas > 0) detailParts.push(`${nbPrestas} prestation${nbPrestas > 1 ? 's' : ''}`);
+  if (nbProduits > 0) detailParts.push(`${nbProduits} produit${nbProduits > 1 ? 's' : ''}`);
   const detail = sessionTxs.length > 1
-    ? `${CAT_ICONS[last.categorie] || ''} ${sessionTxs.length} prestations — ${formatMoney(total)} (${PAY_LABELS[last.paiement]})`
+    ? `${CAT_ICONS[last.categorie] || ''} ${detailParts.join(' + ')} — ${formatMoney(total)} (${PAY_LABELS[last.paiement]})`
     : `${CAT_ICONS[last.categorie] || ''} ${last.prestation} — ${formatMoney(last.montant)} (${PAY_LABELS[last.paiement]})`;
   const cancelId = sessionId || last.id;
   container.innerHTML = `
@@ -1178,10 +1285,10 @@ function cancelLastTx(id, isSession) {
 }
 
 // ==================== ENCAISSEMENT FLOW ====================
-let encaissement = { categorie: '', prestations: [], paiement: '' };
+let encaissement = { categorie: '', prestations: [], produits: [], paiement: '' };
 
 function startEncaissement() {
-  encaissement = { categorie: '', prestations: [], paiement: '' };
+  encaissement = { categorie: '', prestations: [], produits: [], paiement: '' };
   showScreen('screen-cat');
 }
 
@@ -1245,6 +1352,74 @@ function updatePrestaRecap() {
 function validatePrestations() {
   if (encaissement.prestations.length === 0) return;
   vibrate();
+  encaissement.produits = [];
+  showProduitsScreen();
+}
+
+function showProduitsScreen() {
+  const produits = getProduits();
+  const container = document.getElementById('produits-list');
+  const noMsg = document.getElementById('no-produits-msg');
+  container.innerHTML = '';
+  if (produits.length === 0) {
+    noMsg.style.display = 'block';
+  } else {
+    noMsg.style.display = 'none';
+    produits.forEach(p => {
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-produit';
+      btn.innerHTML = `<span class="service-name">${p.nom}</span><span class="service-price">${formatMoney(p.prix)}</span>`;
+      btn.onclick = () => toggleProduit(btn, p.nom, p.prix);
+      container.appendChild(btn);
+    });
+  }
+  updateProduitsRecap();
+  showScreen('screen-produits');
+}
+
+function toggleProduit(btn, nom, prix) {
+  vibrate();
+  const idx = encaissement.produits.findIndex(p => p.nom === nom);
+  if (idx >= 0) {
+    encaissement.produits.splice(idx, 1);
+    btn.classList.remove('selected');
+  } else {
+    encaissement.produits.push({ nom, prix });
+    btn.classList.add('selected');
+  }
+  updateProduitsRecap();
+}
+
+function updateProduitsRecap() {
+  const recap = document.getElementById('produits-recap');
+  const itemsEl = document.getElementById('produits-recap-items');
+  const totalEl = document.getElementById('produits-recap-total');
+  const validateBtn = document.getElementById('produits-validate');
+  const prods = encaissement.produits;
+
+  if (prods.length === 0) {
+    recap.classList.remove('visible');
+    validateBtn.classList.remove('visible');
+    return;
+  }
+
+  recap.classList.add('visible');
+  validateBtn.classList.add('visible');
+
+  itemsEl.innerHTML = prods.map(p => `<div><span>${p.nom}</span><span>${formatMoney(p.prix)}</span></div>`).join('');
+  const total = prods.reduce((s, p) => s + p.prix, 0);
+  totalEl.textContent = formatMoney(total);
+  validateBtn.textContent = `CONTINUER AVEC ${prods.length} PRODUIT${prods.length > 1 ? 'S' : ''} (${formatMoney(total)})`;
+}
+
+function skipProduits() {
+  vibrate();
+  encaissement.produits = [];
+  showScreen('screen-pay');
+}
+
+function validateProduits() {
+  vibrate();
   showScreen('screen-pay');
 }
 
@@ -1255,11 +1430,23 @@ function selectPay(mode) {
   document.getElementById('conf-pay').textContent = PAY_LABELS[mode];
   // Build prestations list
   const listEl = document.getElementById('conf-prestas-list');
-  listEl.innerHTML = encaissement.prestations.map(p =>
-    `<div class="recap-row"><span class="recap-label">${p.nom}</span><span class="recap-value">${formatMoney(p.prix)}</span></div>`
-  ).join('');
-  const total = encaissement.prestations.reduce((s, p) => s + p.prix, 0);
-  document.getElementById('conf-montant').textContent = formatMoney(total);
+  listEl.innerHTML = '<div style="font-size:13px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;padding:10px 0 4px;">Prestations</div>' +
+    encaissement.prestations.map(p =>
+      `<div class="recap-row"><span class="recap-label">${p.nom}</span><span class="recap-value">${formatMoney(p.prix)}</span></div>`
+    ).join('');
+  // Build products list
+  const produitsEl = document.getElementById('conf-produits-list');
+  if (encaissement.produits.length > 0) {
+    produitsEl.innerHTML = '<div style="font-size:13px;font-weight:700;color:#D97706;text-transform:uppercase;letter-spacing:0.5px;padding:10px 0 4px;">Produits</div>' +
+      encaissement.produits.map(p =>
+        `<div class="recap-row"><span class="recap-label">${p.nom}</span><span class="recap-value">${formatMoney(p.prix)}</span></div>`
+      ).join('');
+  } else {
+    produitsEl.innerHTML = '';
+  }
+  const totalPrestas = encaissement.prestations.reduce((s, p) => s + p.prix, 0);
+  const totalProduits = encaissement.produits.reduce((s, p) => s + p.prix, 0);
+  document.getElementById('conf-montant').textContent = formatMoney(totalPrestas + totalProduits);
   showScreen('screen-confirm');
 }
 
@@ -1280,6 +1467,22 @@ function validerEncaissement() {
       prestation: p.nom,
       montant: p.prix,
       paiement: encaissement.paiement,
+      type: 'prestation',
+      _synced: false
+    });
+  });
+
+  encaissement.produits.forEach(p => {
+    txs.push({
+      id: uuid(),
+      session_id: sessionId,
+      date: date,
+      heure: heure,
+      categorie: encaissement.categorie,
+      prestation: p.nom,
+      montant: p.prix,
+      paiement: encaissement.paiement,
+      type: 'produit',
       _synced: false
     });
   });
@@ -1427,6 +1630,7 @@ function renderHisto(txs, start, end) {
   const totalHomme = txs.filter(t => t.categorie === 'homme').reduce((s, t) => s + t.montant, 0);
   const totalFemme = txs.filter(t => t.categorie === 'femme').reduce((s, t) => s + t.montant, 0);
   const totalEnfant = txs.filter(t => t.categorie === 'enfant').reduce((s, t) => s + t.montant, 0);
+  const totalProduits = txs.filter(t => t.type === 'produit').reduce((s, t) => s + t.montant, 0);
 
   let html = '<div class="totals-grid">';
   html += `<div class="total-card"><div class="tc-label">Femme</div><div class="tc-value">${formatMoney(totalFemme)}</div></div>`;
@@ -1436,6 +1640,7 @@ function renderHisto(txs, start, end) {
   html += `<div class="total-card"><div class="tc-label">Espèces</div><div class="tc-value">${formatMoney(totalEspeces)}</div></div>`;
   html += `<div class="total-card"><div class="tc-label">CB</div><div class="tc-value">${formatMoney(totalCB)}</div></div>`;
   html += `<div class="total-card"><div class="tc-label">Chèque</div><div class="tc-value">${formatMoney(totalCheque)}</div></div>`;
+  if (totalProduits > 0) html += `<div class="total-card"><div class="tc-label" style="color:#D97706;">Produits</div><div class="tc-value">${formatMoney(totalProduits)}</div></div>`;
   html += `<div class="total-card full"><div class="tc-label">Total général</div><div class="tc-value">${formatMoney(totalGen)}</div></div>`;
   html += '</div>';
 
@@ -1462,16 +1667,20 @@ function renderHisto(txs, start, end) {
       sessionMap[key].txs.push(t);
     });
 
-    html += '<div class="table-wrap"><table><thead><tr><th>Date</th><th>Heure</th><th>Cat.</th><th>Prestations</th><th>Total</th><th>Paiem.</th><th></th></tr></thead><tbody>';
+    html += '<div class="table-wrap"><table><thead><tr><th>Date</th><th>Heure</th><th>Cat.</th><th>Détail</th><th>Total</th><th>Paiem.</th><th></th></tr></thead><tbody>';
     groups.forEach(g => {
       const total = g.txs.reduce((s, t) => s + t.montant, 0);
-      const prestas = g.txs.map(t => t.prestation).join(', ');
-      const ids = g.txs.map(t => t.id);
+      const prestaTxs = g.txs.filter(t => (t.type || 'prestation') === 'prestation');
+      const produitTxs = g.txs.filter(t => t.type === 'produit');
+      let detailParts = [];
+      if (prestaTxs.length > 0) detailParts.push(prestaTxs.map(t => t.prestation).join(', '));
+      if (produitTxs.length > 0) detailParts.push('<span style="color:#D97706;">' + produitTxs.map(t => t.prestation).join(', ') + '</span>');
+      const detail = detailParts.join(' + ');
       html += `<tr>
         <td>${formatDate(g.date)}</td>
         <td>${g.heure}</td>
         <td>${CAT_ICONS[g.categorie] || ''}</td>
-        <td>${prestas}${g.txs.length > 1 ? ' <span style="color:var(--gray);font-size:12px;">(' + g.txs.length + ')</span>' : ''}</td>
+        <td>${detail}${g.txs.length > 1 ? ' <span style="color:var(--gray);font-size:12px;">(' + g.txs.length + ')</span>' : ''}</td>
         <td style="font-weight:700;">${formatMoney(total)}</td>
         <td>${PAY_LABELS[g.paiement] || g.paiement}</td>
         <td><span class="delete-tx" onclick="deleteSession('${g.key}', ${g.txs.length > 1})">Suppr.</span></td>
@@ -1480,12 +1689,14 @@ function renderHisto(txs, start, end) {
     html += '</tbody></table></div>';
   } else {
     // Detailed view: one row per transaction
-    html += '<div class="table-wrap"><table><thead><tr><th>Date</th><th>Heure</th><th>Cat.</th><th>Prestation</th><th>Montant</th><th>Paiem.</th><th></th></tr></thead><tbody>';
+    html += '<div class="table-wrap"><table><thead><tr><th>Date</th><th>Heure</th><th>Cat.</th><th>Type</th><th>Désignation</th><th>Montant</th><th>Paiem.</th><th></th></tr></thead><tbody>';
     txs.forEach(t => {
+      const typeLabel = t.type === 'produit' ? '<span style="color:#D97706;font-weight:700;">P</span>' : '<span style="color:var(--primary);font-weight:700;">S</span>';
       html += `<tr>
         <td>${formatDate(t.date)}</td>
         <td>${t.heure}</td>
         <td>${CAT_ICONS[t.categorie] || ''}</td>
+        <td>${typeLabel}</td>
         <td>${t.prestation}</td>
         <td style="font-weight:700;">${formatMoney(t.montant)}</td>
         <td>${PAY_LABELS[t.paiement] || t.paiement}</td>
@@ -1684,6 +1895,59 @@ function resetTarifs() {
   });
 }
 
+// ==================== PRODUITS MANAGEMENT ====================
+let editProduits = null;
+
+function showProduits() { showScreen('screen-produits-warn'); }
+
+function renderProduitsEdit() {
+  if (!editProduits) editProduits = JSON.parse(JSON.stringify(getProduits()));
+  const container = document.getElementById('produits-edit-list');
+  container.innerHTML = '';
+  editProduits.forEach((p, i) => {
+    const row = document.createElement('div');
+    row.className = 'tarif-row';
+    row.innerHTML = `
+      <input type="text" class="form-input" value="${p.nom}" onchange="editProduits[${i}].nom=this.value">
+      <input type="number" step="0.5" min="0" class="form-input price-input" value="${p.prix}" inputmode="decimal" onchange="editProduits[${i}].prix=parseFloat(this.value)||0">
+      <button class="btn btn-red btn-icon-only btn-small" onclick="removeProduit(${i})"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    `;
+    container.appendChild(row);
+  });
+  if (editProduits.length === 0) {
+    container.innerHTML = '<div style="text-align:center;color:var(--gray);padding:30px;font-size:15px;">Aucun produit. Cliquez sur "+ AJOUTER UN PRODUIT" pour commencer.</div>';
+  }
+}
+
+function addProduit() {
+  if (!editProduits) editProduits = JSON.parse(JSON.stringify(getProduits()));
+  editProduits.push({ nom: 'Nouveau produit', prix: 0 });
+  renderProduitsEdit();
+  const container = document.getElementById('produits-edit-list');
+  const lastInput = container.lastElementChild.querySelector('input');
+  if (lastInput) { lastInput.focus(); lastInput.select(); }
+}
+
+function removeProduit(i) {
+  showModal('Supprimer', 'Supprimer ce produit ?', () => {
+    editProduits.splice(i, 1);
+    renderProduitsEdit();
+  });
+}
+
+function saveProduitsList() {
+  setJSON('nt_produits', editProduits);
+  editProduits = null;
+  showFlash('Produits enregistrés');
+}
+
+function resetProduitsList() {
+  showModal('Tout supprimer', 'Supprimer tous les produits ? Cette action est irréversible.', () => {
+    editProduits = [];
+    renderProduitsEdit();
+  });
+}
+
 // ==================== SETTINGS ====================
 function loadSettings() {
   const s = getSettings();
@@ -1794,7 +2058,7 @@ async function syncPending() {
     const rows = pending.map(t => ({
       id: t.id, session_id: t.session_id || null, date: t.date, heure: t.heure,
       categorie: t.categorie, prestation: t.prestation,
-      montant: t.montant, paiement: t.paiement
+      montant: t.montant, paiement: t.paiement, type: t.type || 'prestation'
     }));
     const { error } = await sb.from('transactions').upsert(rows, { onConflict: 'id' });
     if (!error) {
