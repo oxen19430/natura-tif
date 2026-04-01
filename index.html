@@ -707,7 +707,21 @@ tr:nth-child(even) { background: var(--gray-light); }
 .last-tx .lt-info { flex: 1; }
 .last-tx .lt-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--gray); font-weight: 600; }
 .last-tx .lt-detail { font-weight: 600; color: var(--primary); margin-top: 2px; }
+.last-tx .lt-buttons { display: flex; gap: 8px; flex-shrink: 0; }
 .last-tx .lt-cancel { background: var(--red); color: white; border: none; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; }
+.last-tx .lt-edit { background: var(--primary); color: white; border: none; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; }
+.lt-edit-panel { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; }
+.lt-edit-panel h3 { font-size: 14px; font-weight: 700; color: var(--primary); margin-bottom: 10px; }
+.lt-edit-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); gap: 10px; }
+.lt-edit-row:last-of-type { border-bottom: none; }
+.lt-edit-row .lt-edit-name { flex: 1; font-size: 13px; color: var(--text); }
+.lt-edit-row .lt-edit-type { font-size: 11px; color: var(--gray); margin-right: 4px; }
+.lt-edit-row input { width: 75px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; font-weight: 600; text-align: right; font-family: 'Inter', sans-serif; }
+.lt-edit-row input:focus { border-color: var(--primary); outline: none; }
+.lt-edit-actions { display: flex; gap: 8px; margin-top: 12px; }
+.lt-edit-actions button { flex: 1; padding: 10px; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; }
+.lt-edit-save { background: var(--green); color: white; }
+.lt-edit-close { background: var(--primary-light); color: var(--primary); }
 
 /* ===== Sync floating icon ===== */
 .sync-floating {
@@ -1409,8 +1423,12 @@ function renderLastTx(txs) {
         <div class="lt-label">Dernier encaissement — ${last.heure}</div>
         <div class="lt-detail">${detail}</div>
       </div>
-      <button class="lt-cancel" onclick="cancelLastTx('${cancelId}', ${!!sessionId})">Annuler</button>
+      <div class="lt-buttons">
+        <button class="lt-edit" onclick="editLastTx('${cancelId}', ${!!sessionId})">Modifier</button>
+        <button class="lt-cancel" onclick="cancelLastTx('${cancelId}', ${!!sessionId})">Annuler</button>
+      </div>
     </div>
+    <div id="lt-edit-panel"></div>
   `;
 }
 
@@ -1426,6 +1444,44 @@ function cancelLastTx(id, isSession) {
     setJSON('nt_transactions', txs);
     updateHome();
   });
+}
+
+function editLastTx(id, isSession) {
+  vibrate();
+  const txs = getTransactions();
+  const items = isSession ? txs.filter(t => t.session_id === id) : txs.filter(t => t.id === id);
+  if (items.length === 0) return;
+  const panel = document.getElementById('lt-edit-panel');
+  let html = '<div class="lt-edit-panel"><h3>Modifier le dernier encaissement</h3>';
+  items.forEach((t, i) => {
+    const typeLabel = t.type === 'produit' ? 'Produit' : 'Presta.';
+    html += `<div class="lt-edit-row">
+      <span class="lt-edit-type">${typeLabel}</span>
+      <span class="lt-edit-name">${t.prestation}</span>
+      <input type="number" step="0.5" min="0" inputmode="decimal" value="${t.montant}" id="lt-edit-prix-${i}" onfocus="this.select()"> €
+    </div>`;
+  });
+  html += `<div class="lt-edit-actions">
+    <button class="lt-edit-close" onclick="document.getElementById('lt-edit-panel').innerHTML=''">Fermer</button>
+    <button class="lt-edit-save" onclick="saveLastTxEdit('${id}', ${isSession}, ${items.length})">Enregistrer</button>
+  </div></div>`;
+  panel.innerHTML = html;
+}
+
+function saveLastTxEdit(id, isSession, count) {
+  vibrate();
+  const txs = getTransactions();
+  const items = isSession ? txs.filter(t => t.session_id === id) : txs.filter(t => t.id === id);
+  items.forEach((t, i) => {
+    const input = document.getElementById('lt-edit-prix-' + i);
+    if (input) {
+      t.montant = parseFloat(input.value) || 0;
+      t._synced = false;
+    }
+  });
+  setJSON('nt_transactions', txs);
+  updateHome();
+  syncPending();
 }
 
 // ==================== ENCAISSEMENT FLOW ====================
