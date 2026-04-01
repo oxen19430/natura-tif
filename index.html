@@ -465,6 +465,25 @@ tr:nth-child(even) { background: var(--gray-light); }
   transition: all 0.15s;
 }
 .settings-btn:active { background: var(--primary-light); }
+.settings-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  background: var(--red);
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 9px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  line-height: 1;
+  font-family: 'Inter', sans-serif;
+}
+.settings-badge.visible { display: flex; }
 
 /* ===== Tarif edit row ===== */
 .tarif-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
@@ -632,7 +651,7 @@ tr:nth-child(even) { background: var(--gray-light); }
 
 <!-- ============ ACCUEIL ============ -->
 <div class="screen active" id="screen-home">
-  <button class="settings-btn" onclick="showScreen('screen-settings')" title="Paramètres"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+  <button class="settings-btn" onclick="showScreen('screen-settings')" title="Paramètres"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="settings-badge" id="settings-badge">1</span></button>
   <div class="brand">
     <h1 id="brand-name">Natura Tif</h1>
     <div class="tagline">Salon de coiffure — Laroquebrou</div>
@@ -1638,6 +1657,28 @@ async function testAndSaveSync() {
 }
 
 // ==================== FORCE UPDATE ====================
+let _updateAvailable = false;
+
+async function checkForUpdate() {
+  const badge = document.getElementById('settings-badge');
+  if (!badge || !navigator.onLine) return;
+  try {
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg) {
+        await reg.update();
+        if (reg.waiting || reg.installing) {
+          _updateAvailable = true;
+          badge.classList.add('visible');
+          return;
+        }
+      }
+    }
+  } catch(e) {}
+  _updateAvailable = false;
+  badge.classList.remove('visible');
+}
+
 async function forceUpdate() {
   const res = document.getElementById('update-result');
   res.style.color = 'var(--gray)';
@@ -1733,10 +1774,20 @@ function init() {
   updateHome();
   updateSyncBadge();
   // Auto-sync when internet is restored
-  window.addEventListener('online', () => { updateSyncBadge(); syncPending(); });
+  window.addEventListener('online', () => { updateSyncBadge(); syncPending(); checkForUpdate(); });
   window.addEventListener('offline', () => { updateSyncBadge(); });
+  // Listen for new service worker
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistration().then(reg => {
+      if (!reg) return;
+      reg.addEventListener('updatefound', () => {
+        const badge = document.getElementById('settings-badge');
+        if (badge) { _updateAvailable = true; badge.classList.add('visible'); }
+      });
+    });
+  }
   // Initial sync if online and config exists
-  if (navigator.onLine) syncPending();
+  if (navigator.onLine) { syncPending(); checkForUpdate(); }
 }
 
 init();
