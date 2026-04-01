@@ -379,10 +379,53 @@ body::after {
   aspect-ratio: auto;
   min-height: 70px;
   box-shadow: 0 1px 4px rgba(60,55,20,0.04);
+  position: relative;
 }
 .btn-service:active { border-color: var(--primary); background: var(--primary-light); transform: scale(0.98); }
+.btn-service.selected { background: #7C5CBF; border-color: #6A4DAA; color: white; }
+.btn-service.selected .service-price { color: white; }
+.btn-service.selected::after {
+  content: '✓';
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 22px;
+  font-weight: 700;
+  color: white;
+}
 .btn-service .service-name { flex: 1; font-size: 17px; font-weight: 600; }
-.btn-service .service-price { font-size: 22px; color: var(--primary); font-weight: 700; white-space: nowrap; margin-left: 12px; }
+.btn-service .service-price { font-size: 22px; color: var(--primary); font-weight: 700; white-space: nowrap; margin-left: 12px; margin-right: 30px; }
+
+/* ===== Prestation recap bar ===== */
+.presta-recap {
+  background: #2D2A1E;
+  color: white;
+  padding: 12px 16px;
+  border-radius: 14px;
+  margin-top: 12px;
+  display: none;
+}
+.presta-recap.visible { display: block; }
+.presta-recap-items { font-size: 14px; opacity: 0.85; margin-bottom: 8px; max-height: 80px; overflow-y: auto; }
+.presta-recap-items div { padding: 2px 0; display: flex; justify-content: space-between; }
+.presta-recap-total { display: flex; justify-content: space-between; font-size: 18px; font-weight: 700; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 8px; }
+.presta-validate {
+  width: 100%;
+  margin-top: 10px;
+  padding: 16px;
+  border: none;
+  border-radius: 12px;
+  background: #16A34A;
+  color: white;
+  font-size: 18px;
+  font-weight: 700;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  display: none;
+}
+.presta-validate.visible { display: block; }
+.presta-validate:active { background: #15803d; transform: scale(0.98); }
 
 /* ===== Recap ===== */
 .recap-row { display: flex; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid var(--border); font-size: 18px; }
@@ -730,10 +773,17 @@ tr:nth-child(even) { background: var(--gray-light); }
   <div id="progress-2"></div>
   <div class="header">
     <h1 id="presta-title">Prestation</h1>
-    <div class="subtitle">Choisissez la prestation réalisée</div>
+    <div class="subtitle">Sélectionnez une ou plusieurs prestations</div>
   </div>
-  <div class="scroll-area">
+  <div class="scroll-area" style="padding-bottom:180px;">
     <div class="btn-group" id="presta-list" style="grid-template-columns:1fr;"></div>
+  </div>
+  <div style="position:sticky; bottom:0; background:#FAF8F2; padding:8px 20px 16px; margin:0 -20px;">
+    <div class="presta-recap" id="presta-recap">
+      <div class="presta-recap-items" id="presta-recap-items"></div>
+      <div class="presta-recap-total"><span>Total</span><span id="presta-recap-total">0,00 €</span></div>
+    </div>
+    <button class="presta-validate" id="presta-validate" onclick="validatePrestations()">VALIDER LA SÉLECTION</button>
   </div>
 </div>
 
@@ -771,10 +821,10 @@ tr:nth-child(even) { background: var(--gray-light); }
   </div>
   <div class="card card-highlight" style="margin-top:8px;">
     <div class="recap-row"><span class="recap-label">Catégorie</span><span class="recap-value" id="conf-cat"></span></div>
-    <div class="recap-row"><span class="recap-label">Prestation</span><span class="recap-value" id="conf-presta"></span></div>
     <div class="recap-row"><span class="recap-label">Paiement</span><span class="recap-value" id="conf-pay"></span></div>
+    <div id="conf-prestas-list"></div>
     <div class="recap-total">
-      <span class="recap-total-label">Montant</span>
+      <span class="recap-total-label">Montant total</span>
       <span class="recap-total-amount" id="conf-montant"></span>
     </div>
   </div>
@@ -846,6 +896,9 @@ tr:nth-child(even) { background: var(--gray-light); }
         <option value="cb">CB</option>
         <option value="cheque">Chèque</option>
       </select>
+    </div>
+    <div style="display:flex; justify-content:flex-end; margin-bottom:8px;">
+      <button class="btn btn-outline btn-small" id="histo-view-toggle" onclick="toggleHistoView()" style="font-size:13px; padding:6px 12px; min-height:auto;">Vue groupée</button>
     </div>
     <div id="histo-results"></div>
     <div class="btn-group" style="margin-top:16px;">
@@ -1091,36 +1144,51 @@ function renderLastTx(txs) {
   const container = document.getElementById('last-tx-container');
   if (txs.length === 0) { container.innerHTML = ''; return; }
   const last = txs[txs.length - 1];
+  // Group by session_id if available
+  const sessionId = last.session_id;
+  const sessionTxs = sessionId ? txs.filter(t => t.session_id === sessionId) : [last];
+  const total = sessionTxs.reduce((s, t) => s + t.montant, 0);
+  const detail = sessionTxs.length > 1
+    ? `${CAT_ICONS[last.categorie] || ''} ${sessionTxs.length} prestations — ${formatMoney(total)} (${PAY_LABELS[last.paiement]})`
+    : `${CAT_ICONS[last.categorie] || ''} ${last.prestation} — ${formatMoney(last.montant)} (${PAY_LABELS[last.paiement]})`;
+  const cancelId = sessionId || last.id;
   container.innerHTML = `
     <div class="last-tx">
       <div class="lt-info">
         <div class="lt-label">Dernier encaissement — ${last.heure}</div>
-        <div class="lt-detail">${CAT_ICONS[last.categorie] || ''} ${last.prestation} — ${formatMoney(last.montant)} (${PAY_LABELS[last.paiement]})</div>
+        <div class="lt-detail">${detail}</div>
       </div>
-      <button class="lt-cancel" onclick="cancelLastTx('${last.id}')">Annuler</button>
+      <button class="lt-cancel" onclick="cancelLastTx('${cancelId}', ${!!sessionId})">Annuler</button>
     </div>
   `;
 }
 
-function cancelLastTx(id) {
-  showModal('Annuler le dernier encaissement', 'Cette transaction sera supprimée. Continuer ?', () => {
-    let txs = getTransactions().filter(t => t.id !== id);
+function cancelLastTx(id, isSession) {
+  const label = isSession ? 'Annuler les prestations de cette session' : 'Annuler le dernier encaissement';
+  showModal(label, 'Cette transaction sera supprimée. Continuer ?', () => {
+    let txs = getTransactions();
+    if (isSession) {
+      txs = txs.filter(t => t.session_id !== id);
+    } else {
+      txs = txs.filter(t => t.id !== id);
+    }
     setJSON('nt_transactions', txs);
     updateHome();
   });
 }
 
 // ==================== ENCAISSEMENT FLOW ====================
-let encaissement = { categorie: '', prestation: '', montant: 0, paiement: '' };
+let encaissement = { categorie: '', prestations: [], paiement: '' };
 
 function startEncaissement() {
-  encaissement = { categorie: '', prestation: '', montant: 0, paiement: '' };
+  encaissement = { categorie: '', prestations: [], paiement: '' };
   showScreen('screen-cat');
 }
 
 function selectCat(cat) {
   vibrate();
   encaissement.categorie = cat;
+  encaissement.prestations = [];
   document.getElementById('presta-title').textContent = CAT_ICONS[cat] + ' Prestation — ' + CAT_LABELS[cat];
   const tarifs = getTarifs();
   const list = tarifs[cat] || [];
@@ -1129,17 +1197,54 @@ function selectCat(cat) {
   list.forEach(p => {
     const btn = document.createElement('button');
     btn.className = 'btn btn-service';
+    btn.dataset.nom = p.nom;
+    btn.dataset.prix = p.prix;
     btn.innerHTML = `<span class="service-name">${p.nom}</span><span class="service-price">${formatMoney(p.prix)}</span>`;
-    btn.onclick = () => selectPresta(p.nom, p.prix);
+    btn.onclick = () => togglePresta(btn, p.nom, p.prix);
     container.appendChild(btn);
   });
+  updatePrestaRecap();
   showScreen('screen-presta');
 }
 
-function selectPresta(nom, prix) {
+function togglePresta(btn, nom, prix) {
   vibrate();
-  encaissement.prestation = nom;
-  encaissement.montant = prix;
+  const idx = encaissement.prestations.findIndex(p => p.nom === nom);
+  if (idx >= 0) {
+    encaissement.prestations.splice(idx, 1);
+    btn.classList.remove('selected');
+  } else {
+    encaissement.prestations.push({ nom, prix });
+    btn.classList.add('selected');
+  }
+  updatePrestaRecap();
+}
+
+function updatePrestaRecap() {
+  const recap = document.getElementById('presta-recap');
+  const itemsEl = document.getElementById('presta-recap-items');
+  const totalEl = document.getElementById('presta-recap-total');
+  const validateBtn = document.getElementById('presta-validate');
+  const prestas = encaissement.prestations;
+
+  if (prestas.length === 0) {
+    recap.classList.remove('visible');
+    validateBtn.classList.remove('visible');
+    return;
+  }
+
+  recap.classList.add('visible');
+  validateBtn.classList.add('visible');
+
+  itemsEl.innerHTML = prestas.map(p => `<div><span>${p.nom}</span><span>${formatMoney(p.prix)}</span></div>`).join('');
+  const total = prestas.reduce((s, p) => s + p.prix, 0);
+  totalEl.textContent = formatMoney(total);
+  validateBtn.textContent = `VALIDER LA SÉLECTION (${prestas.length} prestation${prestas.length > 1 ? 's' : ''} — ${formatMoney(total)})`;
+}
+
+function validatePrestations() {
+  if (encaissement.prestations.length === 0) return;
+  vibrate();
   showScreen('screen-pay');
 }
 
@@ -1147,29 +1252,42 @@ function selectPay(mode) {
   vibrate();
   encaissement.paiement = mode;
   document.getElementById('conf-cat').textContent = CAT_ICONS[encaissement.categorie] + ' ' + CAT_LABELS[encaissement.categorie];
-  document.getElementById('conf-presta').textContent = encaissement.prestation;
   document.getElementById('conf-pay').textContent = PAY_LABELS[mode];
-  document.getElementById('conf-montant').textContent = formatMoney(encaissement.montant);
+  // Build prestations list
+  const listEl = document.getElementById('conf-prestas-list');
+  listEl.innerHTML = encaissement.prestations.map(p =>
+    `<div class="recap-row"><span class="recap-label">${p.nom}</span><span class="recap-value">${formatMoney(p.prix)}</span></div>`
+  ).join('');
+  const total = encaissement.prestations.reduce((s, p) => s + p.prix, 0);
+  document.getElementById('conf-montant').textContent = formatMoney(total);
   showScreen('screen-confirm');
 }
 
 function validerEncaissement() {
   vibrate();
-  const tx = {
-    id: uuid(),
-    date: todayStr(),
-    heure: nowTime(),
-    categorie: encaissement.categorie,
-    prestation: encaissement.prestation,
-    montant: encaissement.montant,
-    paiement: encaissement.paiement,
-    _synced: false
-  };
+  const sessionId = uuid();
+  const date = todayStr();
+  const heure = nowTime();
   const txs = getTransactions();
-  txs.push(tx);
+
+  encaissement.prestations.forEach(p => {
+    txs.push({
+      id: uuid(),
+      session_id: sessionId,
+      date: date,
+      heure: heure,
+      categorie: encaissement.categorie,
+      prestation: p.nom,
+      montant: p.prix,
+      paiement: encaissement.paiement,
+      _synced: false
+    });
+  });
+
   setJSON('nt_transactions', txs);
   syncPending();
-  showFlash('Encaissement enregistré');
+  const n = encaissement.prestations.length;
+  showFlash(n > 1 ? `${n} prestations enregistrées` : 'Encaissement enregistré');
 }
 
 function showFlash(text) {
@@ -1225,6 +1343,13 @@ function saveFond() {
 let histoPeriodType = 'jour';
 let histoOffset = 0; // 0 = current, -1 = previous, etc.
 let lastFiltered = [];
+let histoGrouped = false;
+
+function toggleHistoView() {
+  histoGrouped = !histoGrouped;
+  document.getElementById('histo-view-toggle').textContent = histoGrouped ? 'Vue détaillée' : 'Vue groupée';
+  applyFilters();
+}
 
 const MOIS_NOMS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
 const JOURS_NOMS = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
@@ -1324,25 +1449,71 @@ function renderHisto(txs, start, end) {
     html += '</div>';
   }
 
-  html += '<div class="table-wrap"><table><thead><tr><th>Date</th><th>Heure</th><th>Cat.</th><th>Prestation</th><th>Montant</th><th>Paiem.</th><th></th></tr></thead><tbody>';
-  txs.forEach(t => {
-    html += `<tr>
-      <td>${formatDate(t.date)}</td>
-      <td>${t.heure}</td>
-      <td>${CAT_ICONS[t.categorie] || ''}</td>
-      <td>${t.prestation}</td>
-      <td style="font-weight:700;">${formatMoney(t.montant)}</td>
-      <td>${PAY_LABELS[t.paiement] || t.paiement}</td>
-      <td><span class="delete-tx" onclick="deleteTx('${t.id}')">Suppr.</span></td>
-    </tr>`;
-  });
-  html += '</tbody></table></div>';
+  if (histoGrouped) {
+    // Grouped view: group by session_id (or individual tx if no session)
+    const groups = [];
+    const sessionMap = {};
+    txs.forEach(t => {
+      const key = t.session_id || t.id;
+      if (!sessionMap[key]) {
+        sessionMap[key] = { key, txs: [], date: t.date, heure: t.heure, categorie: t.categorie, paiement: t.paiement };
+        groups.push(sessionMap[key]);
+      }
+      sessionMap[key].txs.push(t);
+    });
+
+    html += '<div class="table-wrap"><table><thead><tr><th>Date</th><th>Heure</th><th>Cat.</th><th>Prestations</th><th>Total</th><th>Paiem.</th><th></th></tr></thead><tbody>';
+    groups.forEach(g => {
+      const total = g.txs.reduce((s, t) => s + t.montant, 0);
+      const prestas = g.txs.map(t => t.prestation).join(', ');
+      const ids = g.txs.map(t => t.id);
+      html += `<tr>
+        <td>${formatDate(g.date)}</td>
+        <td>${g.heure}</td>
+        <td>${CAT_ICONS[g.categorie] || ''}</td>
+        <td>${prestas}${g.txs.length > 1 ? ' <span style="color:var(--gray);font-size:12px;">(' + g.txs.length + ')</span>' : ''}</td>
+        <td style="font-weight:700;">${formatMoney(total)}</td>
+        <td>${PAY_LABELS[g.paiement] || g.paiement}</td>
+        <td><span class="delete-tx" onclick="deleteSession('${g.key}', ${g.txs.length > 1})">Suppr.</span></td>
+      </tr>`;
+    });
+    html += '</tbody></table></div>';
+  } else {
+    // Detailed view: one row per transaction
+    html += '<div class="table-wrap"><table><thead><tr><th>Date</th><th>Heure</th><th>Cat.</th><th>Prestation</th><th>Montant</th><th>Paiem.</th><th></th></tr></thead><tbody>';
+    txs.forEach(t => {
+      html += `<tr>
+        <td>${formatDate(t.date)}</td>
+        <td>${t.heure}</td>
+        <td>${CAT_ICONS[t.categorie] || ''}</td>
+        <td>${t.prestation}</td>
+        <td style="font-weight:700;">${formatMoney(t.montant)}</td>
+        <td>${PAY_LABELS[t.paiement] || t.paiement}</td>
+        <td><span class="delete-tx" onclick="deleteTx('${t.id}')">Suppr.</span></td>
+      </tr>`;
+    });
+    html += '</tbody></table></div>';
+  }
   container.innerHTML = html;
 }
 
 function deleteTx(id) {
   showModal('Supprimer', 'Voulez-vous supprimer cet encaissement ?', () => {
     let txs = getTransactions().filter(t => t.id !== id);
+    setJSON('nt_transactions', txs);
+    applyFilters();
+  });
+}
+
+function deleteSession(key, isSession) {
+  const label = isSession ? 'Supprimer toutes les prestations de cette session ?' : 'Voulez-vous supprimer cet encaissement ?';
+  showModal('Supprimer', label, () => {
+    let txs = getTransactions();
+    if (isSession) {
+      txs = txs.filter(t => t.session_id !== key);
+    } else {
+      txs = txs.filter(t => t.id !== key);
+    }
     setJSON('nt_transactions', txs);
     applyFilters();
   });
@@ -1621,7 +1792,7 @@ async function syncPending() {
 
   try {
     const rows = pending.map(t => ({
-      id: t.id, date: t.date, heure: t.heure,
+      id: t.id, session_id: t.session_id || null, date: t.date, heure: t.heure,
       categorie: t.categorie, prestation: t.prestation,
       montant: t.montant, paiement: t.paiement
     }));
