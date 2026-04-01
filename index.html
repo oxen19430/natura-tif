@@ -980,6 +980,10 @@ tr:nth-child(even) { background: var(--gray-light); }
     <div class="subtitle">Vérifiez les informations avant de valider</div>
   </div>
   <div class="card card-highlight" style="margin-top:8px;">
+    <div class="recap-row">
+      <span class="recap-label">Date</span>
+      <span class="recap-value"><input type="date" id="conf-date" style="border:none;background:transparent;font-size:16px;font-weight:700;color:var(--primary);font-family:'Inter',sans-serif;text-align:right;padding:0;"></span>
+    </div>
     <div class="recap-row"><span class="recap-label">Catégorie</span><span class="recap-value" id="conf-cat"></span></div>
     <div class="recap-row"><span class="recap-label">Paiement</span><span class="recap-value" id="conf-pay"></span></div>
     <div id="conf-prestas-list"></div>
@@ -1643,6 +1647,7 @@ function confirmMonnaie() {
 }
 
 function showConfirmScreen() {
+  document.getElementById('conf-date').value = todayStr();
   document.getElementById('conf-cat').textContent = CAT_ICONS[encaissement.categorie] + ' ' + CAT_LABELS[encaissement.categorie];
   document.getElementById('conf-pay').textContent = PAY_LABELS[encaissement.paiement];
   // Build prestations list
@@ -1668,7 +1673,7 @@ function showConfirmScreen() {
 function validerEncaissement() {
   vibrate();
   const sessionId = uuid();
-  const date = todayStr();
+  const date = document.getElementById('conf-date').value || todayStr();
   const heure = nowTime();
   const txs = getTransactions();
 
