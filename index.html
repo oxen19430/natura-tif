@@ -1171,6 +1171,7 @@ tr:nth-child(even) { background: var(--gray-light); }
         <label class="form-label">Précisez</label>
         <input type="text" class="form-input" id="ferm-autre" placeholder="Motif de fermeture">
       </div>
+      <div id="ferm-msg" style="font-size:14px;font-weight:600;text-align:center;min-height:20px;margin-bottom:8px;"></div>
       <button class="btn btn-green btn-noSquare btn-full" onclick="ajouterFermeture()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> ENREGISTRER LA FERMETURE</button>
     </div>
 
@@ -2264,9 +2265,18 @@ function renderFermetures() {
 
 function ajouterFermeture() {
   const debut = document.getElementById('ferm-debut').value;
-  if (!debut) { alert('Veuillez sélectionner une date de début.'); return; }
+  const msgEl = document.getElementById('ferm-msg');
+  if (!debut) {
+    msgEl.textContent = 'Veuillez sélectionner une date de début.';
+    msgEl.style.color = 'var(--red)';
+    return;
+  }
   const fin = document.getElementById('ferm-fin').value || debut;
-  if (fin < debut) { alert('La date de fin doit être après la date de début.'); return; }
+  if (fin < debut) {
+    msgEl.textContent = 'La date de fin doit être après la date de début.';
+    msgEl.style.color = 'var(--red)';
+    return;
+  }
   const motifSelect = document.getElementById('ferm-motif').value;
   const motif = motifSelect === 'Autre'
     ? (document.getElementById('ferm-autre').value.trim() || 'Autre')
@@ -2279,6 +2289,9 @@ function ajouterFermeture() {
   document.getElementById('ferm-motif').value = 'Jour férié';
   document.getElementById('ferm-autre').value = '';
   document.getElementById('ferm-autre-group').style.display = 'none';
+  msgEl.textContent = 'Fermeture enregistrée !';
+  msgEl.style.color = 'var(--green)';
+  setTimeout(() => { msgEl.textContent = ''; }, 2500);
   renderFermetures();
   vibrate();
 }
