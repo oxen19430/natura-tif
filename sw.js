@@ -1,4 +1,4 @@
-const CACHE_NAME = 'natura-tif-v1';
+const CACHE_NAME = 'natura-tif-v2';
 const URLS_TO_CACHE = [
   './',
   './index.html',
@@ -29,8 +29,21 @@ self.addEventListener('activate', event => {
   self.clients.claim();
 });
 
-// Fetch: cache first, then network
+// Fetch: network first for HTML, cache first for assets
 self.addEventListener('fetch', event => {
+  const url = new URL(event.request.url);
+  // For HTML pages: try network first, fallback to cache
+  if (event.request.destination === 'document' || url.pathname.endsWith('.html') || url.pathname.endsWith('/')) {
+    event.respondWith(
+      fetch(event.request).then(response => {
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+        return response;
+      }).catch(() => caches.match(event.request))
+    );
+    return;
+  }
+  // For other assets: cache first, fallback to network
   event.respondWith(
     caches.match(event.request).then(cached => {
       if (cached) return cached;

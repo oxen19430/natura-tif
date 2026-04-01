@@ -1393,12 +1393,27 @@ async function sendEmail() {
   body += `Espèces : ${formatMoney(totalEspeces)}\nCarte bancaire : ${formatMoney(totalCB)}\nChèque : ${formatMoney(totalCheque)}\n`;
   if (settings.gerante) body += `\nCordialement,\n${settings.gerante}`;
 
-  // 1. Download PDF automatically
+  const pdfFile = new File([blob], fileName, { type: 'application/pdf' });
+
+  // Android: use Web Share API to share PDF with email body
+  if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+    try {
+      const shareBody = settings.email
+        ? `Destinataire : ${settings.email}\n\n${body}`
+        : body;
+      await navigator.share({
+        title: subject,
+        text: shareBody,
+        files: [pdfFile]
+      });
+      return;
+    } catch(e) { /* user cancelled, fall through */ }
+  }
+
+  // Fallback desktop: download PDF + mailto
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href = url; a.download = fileName; a.click();
   URL.revokeObjectURL(url);
-
-  // 2. Open email client with recipient, subject & body pre-filled
   setTimeout(() => {
     window.location.href = `mailto:${settings.email || ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   }, 500);
