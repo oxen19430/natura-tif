@@ -1400,7 +1400,7 @@ async function sendEmail() {
 
   // 2. Open email client with recipient, subject & body pre-filled
   setTimeout(() => {
-    window.location.href = `mailto:${settings.email || ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body + '\n\n---\nLe PDF a été téléchargé, pensez à le joindre à cet email.')}`;
+    window.location.href = `mailto:${settings.email || ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   }, 500);
 }
 
