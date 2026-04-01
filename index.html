@@ -918,6 +918,21 @@ tr:nth-child(even) { background: var(--gray-light); }
     <div id="sync-test-result" style="font-size:13px;margin-top:8px;"></div>
     <button class="btn btn-outline btn-small" style="margin-top:8px;" onclick="testAndSaveSync()">TESTER &amp; ACTIVER LA SYNC</button>
   </div>
+
+  <div class="card" style="margin-top:20px;">
+    <div style="font-size:14px; font-weight:700; color:var(--primary); margin-bottom:4px;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px;"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+      Mise à jour de l'application
+    </div>
+    <div style="font-size:13px; color:var(--gray); margin-bottom:12px; line-height:1.5;">
+      Vérifie et installe la dernière version de l'application.
+    </div>
+    <div id="update-result" style="font-size:13px;margin-bottom:8px;"></div>
+    <button class="btn btn-outline btn-small" onclick="forceUpdate()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px;"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+      VÉRIFIER LES MISES À JOUR
+    </button>
+  </div>
 </div>
 
 <script>
@@ -1619,6 +1634,45 @@ async function testAndSaveSync() {
   } catch(e) {
     res.style.color = 'var(--red)';
     res.textContent = 'Erreur : ' + (e.message || 'Connexion impossible. Vérifiez l\'URL et la clé.');
+  }
+}
+
+// ==================== FORCE UPDATE ====================
+async function forceUpdate() {
+  const res = document.getElementById('update-result');
+  res.style.color = 'var(--gray)';
+  res.textContent = 'Recherche de mises à jour…';
+  try {
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg) {
+        await reg.update();
+        if (reg.waiting) {
+          reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+          res.style.color = 'var(--green)';
+          res.textContent = '✓ Nouvelle version installée ! L\'app va se recharger…';
+          setTimeout(() => window.location.reload(), 1500);
+          return;
+        }
+      }
+    }
+    // Also force reload from network
+    const response = await fetch('./index.html', { cache: 'no-store' });
+    if (response.ok) {
+      if ('caches' in window) {
+        const cache = await caches.open('natura-tif-v2');
+        await cache.put(new Request('./index.html'), response);
+      }
+      res.style.color = 'var(--green)';
+      res.textContent = '✓ Application à jour ! Rechargement…';
+      setTimeout(() => window.location.reload(), 1500);
+    } else {
+      res.style.color = 'var(--red)';
+      res.textContent = 'Impossible de vérifier (pas de connexion internet).';
+    }
+  } catch(e) {
+    res.style.color = 'var(--red)';
+    res.textContent = 'Erreur : pas de connexion internet.';
   }
 }
 
