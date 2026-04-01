@@ -477,6 +477,33 @@ body::after {
 }
 .skip-produits-btn:active { background: var(--gray-light); }
 
+/* ===== Rendu monnaie ===== */
+.monnaie-display {
+  text-align: center;
+  padding: 20px 0;
+}
+.monnaie-total-label { font-size: 14px; color: var(--gray); text-transform: uppercase; letter-spacing: 1px; }
+.monnaie-total { font-size: 42px; font-weight: 700; color: var(--primary); font-family: 'Playfair Display', serif; margin: 4px 0 20px; }
+.monnaie-input-wrap { margin: 16px 0; }
+.monnaie-input-wrap label { display: block; font-size: 14px; color: var(--gray); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+.monnaie-input-wrap input { width: 100%; height: 64px; padding: 0 20px; border: 2px solid var(--border); border-radius: 14px; font-size: 32px; font-weight: 700; font-family: 'Playfair Display', serif; text-align: center; background: white; -webkit-appearance: none; color: var(--primary); }
+.monnaie-input-wrap input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(91,87,35,0.1); }
+.monnaie-result { text-align: center; margin: 20px 0; padding: 20px; border-radius: 14px; }
+.monnaie-result.exact { background: var(--green-light); }
+.monnaie-result.rendu { background: #FFFBEB; }
+.monnaie-result.insuffisant { background: var(--red-light); }
+.monnaie-result-label { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+.monnaie-result-amount { font-size: 38px; font-weight: 700; font-family: 'Playfair Display', serif; }
+.monnaie-result.exact .monnaie-result-label { color: var(--green); }
+.monnaie-result.exact .monnaie-result-amount { color: var(--green); }
+.monnaie-result.rendu .monnaie-result-label { color: #D97706; }
+.monnaie-result.rendu .monnaie-result-amount { color: #D97706; }
+.monnaie-result.insuffisant .monnaie-result-label { color: var(--red); }
+.monnaie-result.insuffisant .monnaie-result-amount { color: var(--red); }
+.monnaie-quick-btns { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin: 12px 0; }
+.monnaie-quick-btn { padding: 10px 18px; border: 2px solid var(--border); border-radius: 10px; background: white; font-size: 18px; font-weight: 700; font-family: 'Inter', sans-serif; color: var(--primary); cursor: pointer; }
+.monnaie-quick-btn:active { background: var(--primary-light); border-color: var(--primary); transform: scale(0.96); }
+
 /* ===== Recap ===== */
 .recap-row { display: flex; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid var(--border); font-size: 18px; }
 .recap-row:last-child { border-bottom: none; }
@@ -887,6 +914,32 @@ tr:nth-child(even) { background: var(--gray-light); }
   </div>
 </div>
 
+<!-- ============ ÉTAPE 4b : RENDU MONNAIE (espèces) ============ -->
+<div class="screen" id="screen-monnaie">
+  <button class="back-btn" onclick="showScreen('screen-pay')">Paiement</button>
+  <div id="progress-4b"></div>
+  <div class="header">
+    <h1>Rendu monnaie</h1>
+    <div class="subtitle">Calculez le montant à rendre au client</div>
+  </div>
+  <div class="monnaie-display">
+    <div class="monnaie-total-label">Total à encaisser</div>
+    <div class="monnaie-total" id="monnaie-total"></div>
+  </div>
+  <div class="monnaie-quick-btns" id="monnaie-quick-btns"></div>
+  <div class="monnaie-input-wrap">
+    <label>Montant donné par le client</label>
+    <input type="number" step="0.01" min="0" id="monnaie-donne" placeholder="0,00" inputmode="decimal" oninput="calcMonnaie()">
+  </div>
+  <div class="monnaie-result" id="monnaie-result" style="display:none;">
+    <div class="monnaie-result-label" id="monnaie-result-label"></div>
+    <div class="monnaie-result-amount" id="monnaie-result-amount"></div>
+  </div>
+  <div class="btn-group" style="margin-top:auto;">
+    <button class="btn btn-green btn-noSquare btn-full" id="monnaie-confirm-btn" style="min-height:70px; font-size:20px;" onclick="confirmMonnaie()"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> CONTINUER</button>
+  </div>
+</div>
+
 <!-- ============ ÉTAPE 5 : CONFIRMATION ============ -->
 <div class="screen" id="screen-confirm">
   <button class="back-btn" onclick="showScreen('screen-pay')">Paiement</button>
@@ -1196,6 +1249,7 @@ function showScreen(id) {
   if (id === 'screen-presta') renderProgress('progress-2', 2);
   if (id === 'screen-produits') renderProgress('progress-3', 3);
   if (id === 'screen-pay') renderProgress('progress-4', 4);
+  if (id === 'screen-monnaie') renderProgress('progress-4b', 4);
   if (id === 'screen-confirm') renderProgress('progress-5', 5);
   if (id === 'screen-produits-edit') renderProduitsEdit();
   window.scrollTo(0, 0);
@@ -1435,11 +1489,88 @@ function validateProduits() {
   showScreen('screen-pay');
 }
 
+function getEncaissementTotal() {
+  return encaissement.prestations.reduce((s, p) => s + p.prix, 0) + encaissement.produits.reduce((s, p) => s + p.prix, 0);
+}
+
 function selectPay(mode) {
   vibrate();
   encaissement.paiement = mode;
+  if (mode === 'especes') {
+    showMonnaieScreen();
+  } else {
+    showConfirmScreen();
+  }
+}
+
+function showMonnaieScreen() {
+  const total = getEncaissementTotal();
+  document.getElementById('monnaie-total').textContent = formatMoney(total);
+  document.getElementById('monnaie-donne').value = '';
+  document.getElementById('monnaie-result').style.display = 'none';
+  // Quick amount buttons
+  const quickBtns = document.getElementById('monnaie-quick-btns');
+  const amounts = [5, 10, 20, 50, 100];
+  quickBtns.innerHTML = amounts
+    .filter(a => a >= total)
+    .map(a => `<button class="monnaie-quick-btn" onclick="setMonnaieDonne(${a})">${a} €</button>`)
+    .join('');
+  // Also add exact amount button
+  quickBtns.innerHTML = `<button class="monnaie-quick-btn" onclick="setMonnaieDonne(${total})">Appoint (${formatMoney(total)})</button>` + quickBtns.innerHTML;
+  showScreen('screen-monnaie');
+  setTimeout(() => document.getElementById('monnaie-donne').focus(), 300);
+}
+
+function setMonnaieDonne(amount) {
+  vibrate();
+  document.getElementById('monnaie-donne').value = amount;
+  calcMonnaie();
+}
+
+function calcMonnaie() {
+  const total = getEncaissementTotal();
+  const donne = parseFloat(document.getElementById('monnaie-donne').value) || 0;
+  const resultDiv = document.getElementById('monnaie-result');
+  const labelEl = document.getElementById('monnaie-result-label');
+  const amountEl = document.getElementById('monnaie-result-amount');
+
+  if (donne <= 0) {
+    resultDiv.style.display = 'none';
+    return;
+  }
+
+  resultDiv.style.display = 'block';
+  const diff = donne - total;
+
+  if (Math.abs(diff) < 0.005) {
+    resultDiv.className = 'monnaie-result exact';
+    labelEl.textContent = 'Compte exact';
+    amountEl.textContent = '0,00 €';
+  } else if (diff > 0) {
+    resultDiv.className = 'monnaie-result rendu';
+    labelEl.textContent = 'À rendre';
+    amountEl.textContent = formatMoney(diff);
+  } else {
+    resultDiv.className = 'monnaie-result insuffisant';
+    labelEl.textContent = 'Montant insuffisant';
+    amountEl.textContent = '- ' + formatMoney(Math.abs(diff));
+  }
+}
+
+function confirmMonnaie() {
+  const total = getEncaissementTotal();
+  const donne = parseFloat(document.getElementById('monnaie-donne').value) || 0;
+  if (donne < total) {
+    vibrate();
+    return;
+  }
+  vibrate();
+  showConfirmScreen();
+}
+
+function showConfirmScreen() {
   document.getElementById('conf-cat').textContent = CAT_ICONS[encaissement.categorie] + ' ' + CAT_LABELS[encaissement.categorie];
-  document.getElementById('conf-pay').textContent = PAY_LABELS[mode];
+  document.getElementById('conf-pay').textContent = PAY_LABELS[encaissement.paiement];
   // Build prestations list
   const listEl = document.getElementById('conf-prestas-list');
   listEl.innerHTML = '<div style="font-size:13px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;padding:10px 0 4px;">Prestations</div>' +
@@ -1456,9 +1587,7 @@ function selectPay(mode) {
   } else {
     produitsEl.innerHTML = '';
   }
-  const totalPrestas = encaissement.prestations.reduce((s, p) => s + p.prix, 0);
-  const totalProduits = encaissement.produits.reduce((s, p) => s + p.prix, 0);
-  document.getElementById('conf-montant').textContent = formatMoney(totalPrestas + totalProduits);
+  document.getElementById('conf-montant').textContent = formatMoney(getEncaissementTotal());
   showScreen('screen-confirm');
 }
 
