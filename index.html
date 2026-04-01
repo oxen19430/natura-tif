@@ -690,6 +690,17 @@ tr:nth-child(even) { background: var(--gray-light); }
 
 /* ===== Misc ===== */
 .delete-tx { color: var(--red); font-size: 13px; cursor: pointer; text-decoration: underline; }
+.edit-tx { color: var(--primary); font-size: 13px; cursor: pointer; text-decoration: underline; margin-right: 8px; }
+.histo-edit-row td { background: var(--primary-light) !important; padding: 12px !important; }
+.histo-edit-content { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.histo-edit-item { display: flex; align-items: center; gap: 6px; background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; }
+.histo-edit-item span { font-size: 13px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.histo-edit-item input { width: 65px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; font-weight: 600; text-align: right; font-family: 'Inter', sans-serif; }
+.histo-edit-item input:focus { border-color: var(--primary); outline: none; }
+.histo-edit-btns { display: flex; gap: 6px; margin-left: auto; }
+.histo-edit-btns button { padding: 6px 14px; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; }
+.histo-edit-btns .he-save { background: var(--green); color: white; }
+.histo-edit-btns .he-close { background: var(--card); color: var(--primary); border: 1px solid var(--border); }
 .clock { font-size: 14px; color: var(--gray); font-weight: 500; }
 
 /* ===== Last transaction banner ===== */
@@ -1998,7 +2009,7 @@ function renderHisto(txs, start, end) {
         <td>${detail}${g.txs.length > 1 ? ' <span style="color:var(--gray);font-size:12px;">(' + g.txs.length + ')</span>' : ''}</td>
         <td style="font-weight:700;">${formatMoney(total)}</td>
         <td>${PAY_LABELS[g.paiement] || g.paiement}</td>
-        <td><span class="delete-tx" onclick="deleteSession('${g.key}', ${g.txs.length > 1})">Suppr.</span></td>
+        <td><span class="edit-tx" onclick="toggleHistoEdit('${g.key}', ${g.txs.length > 1}, this)">Modif.</span><span class="delete-tx" onclick="deleteSession('${g.key}', ${g.txs.length > 1})">Suppr.</span></td>
       </tr>`;
     });
     html += '</tbody></table></div>';
@@ -2015,7 +2026,7 @@ function renderHisto(txs, start, end) {
         <td>${t.prestation}</td>
         <td style="font-weight:700;">${formatMoney(t.montant)}</td>
         <td>${PAY_LABELS[t.paiement] || t.paiement}</td>
-        <td><span class="delete-tx" onclick="deleteTx('${t.id}')">Suppr.</span></td>
+        <td><span class="edit-tx" onclick="toggleHistoEdit('${t.id}', false, this)">Modif.</span><span class="delete-tx" onclick="deleteTx('${t.id}')">Suppr.</span></td>
       </tr>`;
     });
     html += '</tbody></table></div>';
@@ -2043,6 +2054,50 @@ function deleteSession(key, isSession) {
     setJSON('nt_transactions', txs);
     applyFilters();
   });
+}
+
+function toggleHistoEdit(key, isSession, el) {
+  vibrate();
+  const row = el.closest('tr');
+  const existing = row.nextElementSibling;
+  if (existing && existing.classList.contains('histo-edit-row')) {
+    existing.remove();
+    return;
+  }
+  // Remove any other open edit rows
+  document.querySelectorAll('.histo-edit-row').forEach(r => r.remove());
+
+  const txs = getTransactions();
+  const items = isSession ? txs.filter(t => t.session_id === key) : txs.filter(t => t.id === key);
+  if (items.length === 0) return;
+
+  const colSpan = row.children.length;
+  const editRow = document.createElement('tr');
+  editRow.className = 'histo-edit-row';
+  let inner = '<td colspan="' + colSpan + '"><div class="histo-edit-content">';
+  items.forEach((t, i) => {
+    inner += `<div class="histo-edit-item"><span>${t.prestation}</span><input type="number" step="0.5" min="0" inputmode="decimal" value="${t.montant}" id="he-prix-${key}-${i}" onfocus="this.select()"> €</div>`;
+  });
+  inner += `<div class="histo-edit-btns"><button class="he-close" onclick="this.closest('.histo-edit-row').remove()">Fermer</button><button class="he-save" onclick="saveHistoEdit('${key}', ${isSession}, ${items.length})">OK</button></div>`;
+  inner += '</div></td>';
+  editRow.innerHTML = inner;
+  row.after(editRow);
+}
+
+function saveHistoEdit(key, isSession, count) {
+  vibrate();
+  const txs = getTransactions();
+  const items = isSession ? txs.filter(t => t.session_id === key) : txs.filter(t => t.id === key);
+  items.forEach((t, i) => {
+    const input = document.getElementById('he-prix-' + key + '-' + i);
+    if (input) {
+      t.montant = parseFloat(input.value) || 0;
+      t._synced = false;
+    }
+  });
+  setJSON('nt_transactions', txs);
+  applyFilters();
+  syncPending();
 }
 
 // ==================== EXPORT PDF ====================
