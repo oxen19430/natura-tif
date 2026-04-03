@@ -782,17 +782,35 @@ tr:nth-child(even) { background: var(--gray-light); }
   right: 14px;
   background: var(--primary-dark);
   color: white;
-  padding: 8px 14px;
-  border-radius: 10px;
+  padding: 12px 16px;
+  border-radius: 12px;
   font-size: 13px;
   font-weight: 500;
   z-index: 999;
   box-shadow: var(--shadow-lg);
-  max-width: 260px;
+  max-width: 280px;
   line-height: 1.4;
 }
 .sync-tooltip.visible { display: block; animation: fadeIn 0.15s ease; }
+.sync-tooltip .sync-status-text { margin-bottom: 10px; }
+.sync-tooltip .sync-btn {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  width: 100%; padding: 10px; border: none; border-radius: 8px;
+  font-size: 14px; font-weight: 600; cursor: pointer;
+  background: white; color: var(--primary-dark);
+  transition: opacity 0.2s;
+}
+.sync-tooltip .sync-btn:active { opacity: 0.8; }
+.sync-tooltip .sync-btn:disabled { opacity: 0.5; cursor: default; }
+.sync-tooltip .sync-btn svg { flex-shrink: 0; }
+.sync-tooltip .sync-result {
+  margin-top: 8px; padding: 6px 10px; border-radius: 6px;
+  font-size: 12px; font-weight: 500; text-align: center;
+}
+.sync-result-ok { background: rgba(122,155,46,0.3); }
+.sync-result-err { background: rgba(200,60,60,0.3); }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
 /* ===== SVG Icons ===== */
 .ico { display: inline-block; width: 28px; height: 28px; vertical-align: middle; flex-shrink: 0; }
@@ -2630,7 +2648,7 @@ function updateSyncBadge() {
   _syncStatusText = text;
   // Update tooltip if visible
   const tip = document.getElementById('sync-tooltip');
-  if (tip && tip.classList.contains('visible')) tip.textContent = text;
+  if (tip && tip.classList.contains('visible')) renderSyncPanel();
 }
 
 let _syncTooltipTimer = null;
@@ -2642,10 +2660,81 @@ function toggleSyncTooltip() {
     tip.classList.remove('visible');
     return;
   }
-  tip.textContent = _syncStatusText;
+  renderSyncPanel();
   tip.classList.add('visible');
   clearTimeout(_syncTooltipTimer);
-  _syncTooltipTimer = setTimeout(() => tip.classList.remove('visible'), 4000);
+  _syncTooltipTimer = setTimeout(() => tip.classList.remove('visible'), 5000);
+}
+
+function renderSyncPanel() {
+  const tip = document.getElementById('sync-tooltip');
+  if (!tip) return;
+  const cfg = getSyncConfig();
+  const configured = cfg.url && cfg.key;
+  const online = navigator.onLine;
+  const pending = getTransactions().filter(t => !t._synced).length;
+
+  let html = '<div class="sync-status-text">' + _syncStatusText + '</div>';
+  if (configured && online) {
+    const label = pending > 0
+      ? `Envoyer ${pending} encaissement${pending > 1 ? 's' : ''}`
+      : 'Tout est synchronisé';
+    html += `<button class="sync-btn" onclick="manualSync()" ${pending === 0 ? 'disabled' : ''}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+      ${label}
+    </button>`;
+  } else if (configured && !online) {
+    html += `<button class="sync-btn" disabled>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/></svg>
+      Hors ligne
+    </button>`;
+  }
+  html += '<div id="sync-manual-result"></div>';
+  tip.innerHTML = html;
+}
+
+async function manualSync() {
+  vibrate();
+  const btn = document.querySelector('.sync-tooltip .sync-btn');
+  const resultEl = document.getElementById('sync-manual-result');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="animation:spin 1s linear infinite"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg> Synchronisation…'; }
+
+  const sb = getSbClient();
+  if (!sb || !navigator.onLine) {
+    if (resultEl) { resultEl.className = 'sync-result sync-result-err'; resultEl.textContent = 'Impossible : hors ligne ou non configuré.'; }
+    updateSyncBadge();
+    return;
+  }
+  const txs = getTransactions();
+  const pending = txs.filter(t => !t._synced);
+  if (pending.length === 0) {
+    if (resultEl) { resultEl.className = 'sync-result sync-result-ok'; resultEl.textContent = '✓ Aucune donnée en attente.'; }
+    updateSyncBadge();
+    renderSyncPanel();
+    return;
+  }
+
+  const floatEl = document.getElementById('sync-float');
+  if (floatEl) floatEl.className = 'sync-floating sf-syncing';
+
+  try {
+    const rows = pending.map(t => ({
+      id: t.id, session_id: t.session_id || null, date: t.date, heure: t.heure,
+      categorie: t.categorie, prestation: t.prestation,
+      montant: t.montant, paiement: t.paiement, type: t.type || 'prestation'
+    }));
+    const { error } = await sb.from('transactions').upsert(rows, { onConflict: 'id' });
+    if (error) throw error;
+    txs.forEach(t => { t._synced = true; });
+    setJSON('nt_transactions', txs);
+    if (resultEl) { resultEl.className = 'sync-result sync-result-ok'; resultEl.textContent = `✓ ${pending.length} encaissement${pending.length > 1 ? 's' : ''} envoyé${pending.length > 1 ? 's' : ''} avec succès !`; }
+  } catch(e) {
+    if (resultEl) { resultEl.className = 'sync-result sync-result-err'; resultEl.textContent = 'Erreur : ' + (e.message || 'Synchronisation échouée.'); }
+  }
+  updateSyncBadge();
+  clearTimeout(_syncTooltipTimer);
+  const tip = document.getElementById('sync-tooltip');
+  _syncTooltipTimer = setTimeout(() => { if (tip) tip.classList.remove('visible'); }, 6000);
 }
 
 // Close tooltip on tap elsewhere
