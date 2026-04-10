@@ -429,6 +429,36 @@ body::after {
 }
 .presta-validate.visible { display: block; }
 .presta-validate:active { background: #5F7A1E; transform: scale(0.98); }
+.add-client-btn {
+  width: 100%;
+  margin-top: 10px;
+  padding: 12px;
+  border: 2px dashed var(--primary);
+  border-radius: 12px;
+  background: rgba(255,255,255,0.6);
+  color: var(--primary);
+  font-size: 14px;
+  font-weight: 700;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.add-client-btn.visible { display: flex; }
+.add-client-btn:active { background: rgba(255,255,255,0.9); transform: scale(0.98); }
+.recap-client-header {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  opacity: 0.7;
+  padding: 6px 0 2px;
+  border-top: 1px solid rgba(255,255,255,0.15);
+  margin-top: 4px;
+}
+.recap-client-header:first-child { border-top: none; margin-top: 0; padding-top: 0; }
 
 /* ===== Product buttons ===== */
 .btn-produit {
@@ -933,13 +963,13 @@ tr:nth-child(even) { background: var(--gray-light); }
 
 <!-- ============ ÉTAPE 2 : PRESTATION ============ -->
 <div class="screen" id="screen-presta">
-  <button class="back-btn" onclick="showScreen('screen-cat')">Catégorie</button>
+  <button class="back-btn" onclick="backFromPresta()">Catégorie</button>
   <div id="progress-2"></div>
   <div class="header">
     <h1 id="presta-title">Prestation</h1>
     <div class="subtitle">Sélectionnez une ou plusieurs prestations</div>
   </div>
-  <div class="scroll-area" style="padding-bottom:180px;">
+  <div class="scroll-area" style="padding-bottom:220px;">
     <div class="btn-group" id="presta-list" style="grid-template-columns:1fr;"></div>
   </div>
   <div style="position:sticky; bottom:0; background:#FAF8F2; padding:8px 20px 16px; margin:0 -20px;">
@@ -947,6 +977,10 @@ tr:nth-child(even) { background: var(--gray-light); }
       <div class="presta-recap-items" id="presta-recap-items"></div>
       <div class="presta-recap-total"><span>Total</span><span id="presta-recap-total">0,00 €</span></div>
     </div>
+    <button class="add-client-btn" id="add-client-btn" onclick="addAnotherClient()">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+      AJOUTER UN AUTRE CLIENT
+    </button>
     <button class="presta-validate" id="presta-validate" onclick="validatePrestations()">VALIDER LA SÉLECTION</button>
   </div>
 </div>
@@ -1629,18 +1663,32 @@ function saveEditedPrices(key, isSession, idPrefix) {
 }
 
 // ==================== ENCAISSEMENT FLOW ====================
-let encaissement = { categorie: '', prestations: [], produits: [], paiement: '' };
+let encaissement = { clients: [], produits: [], paiement: '' };
 
 function startEncaissement() {
-  encaissement = { categorie: '', prestations: [], produits: [], paiement: '' };
+  encaissement = { clients: [], produits: [], paiement: '' };
   showScreen('screen-cat');
+}
+
+function currentClient() {
+  return encaissement.clients[encaissement.clients.length - 1];
 }
 
 function selectCat(cat) {
   vibrate();
-  encaissement.categorie = cat;
-  encaissement.prestations = [];
-  document.getElementById('presta-title').textContent = 'Prestation — ' + CAT_LABELS[cat];
+  // If the last client has no prestations yet, replace its category instead of adding a new one
+  const last = encaissement.clients[encaissement.clients.length - 1];
+  let c;
+  if (last && last.prestations.length === 0) {
+    last.categorie = cat;
+    c = last;
+  } else {
+    c = { categorie: cat, prestations: [] };
+    encaissement.clients.push(c);
+  }
+  const clientNum = encaissement.clients.length;
+  const prefix = clientNum > 1 ? `Client ${clientNum} — ` : '';
+  document.getElementById('presta-title').textContent = prefix + 'Prestation — ' + CAT_LABELS[cat];
   const tarifs = getTarifs();
   const list = tarifs[cat] || [];
   const container = document.getElementById('presta-list');
@@ -1658,14 +1706,31 @@ function selectCat(cat) {
   showScreen('screen-presta');
 }
 
+function backFromPresta() {
+  // Drop current client's prestations so user can re-pick category for it
+  const c = currentClient();
+  if (c) c.prestations = [];
+  showScreen('screen-cat');
+}
+
+function addAnotherClient() {
+  vibrate();
+  const c = currentClient();
+  if (!c || c.prestations.length === 0) return;
+  // Just go back to category selection — selectCat will create a new client because the last one has prestations
+  showScreen('screen-cat');
+}
+
 function togglePresta(btn, nom, prix) {
   vibrate();
-  const idx = encaissement.prestations.findIndex(p => p.nom === nom);
+  const c = currentClient();
+  if (!c) return;
+  const idx = c.prestations.findIndex(p => p.nom === nom);
   if (idx >= 0) {
-    encaissement.prestations.splice(idx, 1);
+    c.prestations.splice(idx, 1);
     btn.classList.remove('selected');
   } else {
-    encaissement.prestations.push({ nom, prix });
+    c.prestations.push({ nom, prix });
     btn.classList.add('selected');
   }
   updatePrestaRecap();
@@ -1676,28 +1741,50 @@ function updatePrestaRecap() {
   const itemsEl = document.getElementById('presta-recap-items');
   const totalEl = document.getElementById('presta-recap-total');
   const validateBtn = document.getElementById('presta-validate');
-  const prestas = encaissement.prestations;
+  const addBtn = document.getElementById('add-client-btn');
+  const c = currentClient();
+  if (!c) return;
+  const prestas = c.prestations;
+  const hasPrev = encaissement.clients.length > 1;
 
-  if (prestas.length === 0) {
+  if (prestas.length === 0 && !hasPrev) {
     recap.classList.remove('visible');
     validateBtn.classList.remove('visible');
+    if (addBtn) addBtn.classList.remove('visible');
     return;
   }
 
   recap.classList.add('visible');
   validateBtn.classList.add('visible');
+  if (addBtn) {
+    if (prestas.length > 0) addBtn.classList.add('visible');
+    else addBtn.classList.remove('visible');
+  }
 
-  itemsEl.innerHTML = prestas.map((p, i) => `<div><span>${p.nom}</span><input type="number" step="0.5" min="0" inputmode="decimal" value="${p.prix}" class="recap-price-input" onchange="updatePrestaPrix(${i}, this.value)" onfocus="this.select()"></div>`).join('');
-  const total = prestas.reduce((s, p) => s + p.prix, 0);
-  totalEl.textContent = formatMoney(total);
-  validateBtn.textContent = `VALIDER LA SÉLECTION (${prestas.length} prestation${prestas.length > 1 ? 's' : ''} — ${formatMoney(total)})`;
+  let html = '';
+  if (hasPrev) {
+    encaissement.clients.slice(0, -1).forEach((cl, ci) => {
+      html += `<div class="recap-client-header">Client ${ci + 1} — ${CAT_LABELS[cl.categorie]}</div>`;
+      html += cl.prestations.map(p => `<div><span>${p.nom}</span><span>${formatMoney(p.prix)}</span></div>`).join('');
+    });
+    html += `<div class="recap-client-header">Client ${encaissement.clients.length} — ${CAT_LABELS[c.categorie]} (en cours)</div>`;
+  }
+  html += prestas.map((p, i) => `<div><span>${p.nom}</span><input type="number" step="0.5" min="0" inputmode="decimal" value="${p.prix}" class="recap-price-input" onchange="updatePrestaPrix(${i}, this.value)" onfocus="this.select()"></div>`).join('');
+  itemsEl.innerHTML = html;
+
+  const totalAll = encaissement.clients.reduce((s, cl) => s + cl.prestations.reduce((ss, p) => ss + p.prix, 0), 0);
+  const countAll = encaissement.clients.reduce((s, cl) => s + cl.prestations.length, 0);
+  totalEl.textContent = formatMoney(totalAll);
+  validateBtn.textContent = `VALIDER LA SÉLECTION (${countAll} prestation${countAll > 1 ? 's' : ''} — ${formatMoney(totalAll)})`;
 }
 
 function updatePrestaPrix(index, value) {
   const prix = parseFloat(value) || 0;
-  encaissement.prestations[index].prix = prix;
+  const c = currentClient();
+  if (!c) return;
+  c.prestations[index].prix = prix;
   // Update the button display too
-  const nom = encaissement.prestations[index].nom;
+  const nom = c.prestations[index].nom;
   const btn = [...document.querySelectorAll('#presta-list button')].find(b => b.dataset.nom === nom);
   if (btn) {
     btn.dataset.prix = prix;
@@ -1707,7 +1794,8 @@ function updatePrestaPrix(index, value) {
 }
 
 function validatePrestations() {
-  if (encaissement.prestations.length === 0) return;
+  const c = currentClient();
+  if (!c || c.prestations.length === 0) return;
   vibrate();
   encaissement.produits = [];
   showProduitsScreen();
@@ -1784,7 +1872,9 @@ function validateProduits() {
 }
 
 function getEncaissementTotal() {
-  return encaissement.prestations.reduce((s, p) => s + p.prix, 0) + encaissement.produits.reduce((s, p) => s + p.prix, 0);
+  const prestasSum = encaissement.clients.reduce((s, c) => s + c.prestations.reduce((ss, p) => ss + p.prix, 0), 0);
+  const produitsSum = encaissement.produits.reduce((s, p) => s + p.prix, 0);
+  return prestasSum + produitsSum;
 }
 
 function selectPay(mode) {
@@ -1864,14 +1954,22 @@ function confirmMonnaie() {
 
 function showConfirmScreen() {
   document.getElementById('conf-date').value = todayStr();
-  document.getElementById('conf-cat').textContent = CAT_LABELS[encaissement.categorie];
+  const cats = encaissement.clients.map(c => CAT_LABELS[c.categorie]).join(' + ');
+  document.getElementById('conf-cat').textContent = cats;
   document.getElementById('conf-pay').textContent = PAY_LABELS[encaissement.paiement];
-  // Build prestations list
+  // Build prestations list (grouped per client when more than one)
   const listEl = document.getElementById('conf-prestas-list');
-  listEl.innerHTML = '<div style="font-size:13px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;padding:10px 0 4px;">Prestations</div>' +
-    encaissement.prestations.map(p =>
+  let html = '';
+  encaissement.clients.forEach((c, ci) => {
+    const label = encaissement.clients.length > 1
+      ? `Prestations — Client ${ci + 1} (${CAT_LABELS[c.categorie]})`
+      : 'Prestations';
+    html += `<div style="font-size:13px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;padding:10px 0 4px;">${label}</div>`;
+    html += c.prestations.map(p =>
       `<div class="recap-row"><span class="recap-label">${p.nom}</span><span class="recap-value">${formatMoney(p.prix)}</span></div>`
     ).join('');
+  });
+  listEl.innerHTML = html;
   // Build products list
   const produitsEl = document.getElementById('conf-produits-list');
   if (encaissement.produits.length > 0) {
@@ -1893,28 +1991,32 @@ function validerEncaissement() {
   const heure = nowTime();
   const txs = getTransactions();
 
-  encaissement.prestations.forEach(p => {
-    txs.push({
-      id: uuid(),
-      session_id: sessionId,
-      date: date,
-      heure: heure,
-      categorie: encaissement.categorie,
-      prestation: p.nom,
-      montant: p.prix,
-      paiement: encaissement.paiement,
-      type: 'prestation',
-      _synced: false
+  encaissement.clients.forEach(c => {
+    c.prestations.forEach(p => {
+      txs.push({
+        id: uuid(),
+        session_id: sessionId,
+        date: date,
+        heure: heure,
+        categorie: c.categorie,
+        prestation: p.nom,
+        montant: p.prix,
+        paiement: encaissement.paiement,
+        type: 'prestation',
+        _synced: false
+      });
     });
   });
 
+  // Products attach to first client's category (arbitrary but consistent)
+  const firstCat = encaissement.clients[0]?.categorie || 'femme';
   encaissement.produits.forEach(p => {
     txs.push({
       id: uuid(),
       session_id: sessionId,
       date: date,
       heure: heure,
-      categorie: encaissement.categorie,
+      categorie: firstCat,
       prestation: p.nom,
       montant: p.prix,
       paiement: encaissement.paiement,
@@ -1925,7 +2027,7 @@ function validerEncaissement() {
 
   setJSON('nt_transactions', txs);
   syncPending();
-  const n = encaissement.prestations.length;
+  const n = encaissement.clients.reduce((s, c) => s + c.prestations.length, 0);
   showFlash(n > 1 ? `${n} prestations enregistrées` : 'Encaissement enregistré');
 }
 
