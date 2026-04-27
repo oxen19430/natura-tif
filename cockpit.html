@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Natura Tif — Analyse</title>
+<title>Natura Tif — Cockpit</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -14,7 +14,9 @@
   --green: #7A9B2E;
   --green-light: #EAF0D5;
   --red: #B94A3E;
+  --amber: #B8860B;
   --gray: #888;
+  --gray-light: #BBB;
   --bg: #FAF8F2;
   --card: #FFFFFF;
   --text: #2D2A1E;
@@ -35,26 +37,34 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--tex
 
 /* App */
 .app { display: none; max-width: 1100px; margin: 0 auto; padding: 20px 16px 60px; }
-.app-header { text-align: center; padding: 16px 0; position: relative; }
-.app-header h1 { font-family: 'Playfair Display', serif; color: var(--primary); font-size: 24px; }
-.app-header p { color: var(--gray); font-size: 13px; margin-top: 2px; }
-.top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 10px; flex-wrap: wrap; }
+.top-bar .last-sync { font-size: 12px; color: var(--gray); }
 .top-bar .logout { background: none; border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; font-size: 12px; color: var(--gray); cursor: pointer; font-family: 'Inter', sans-serif; }
-.top-bar .admin-link { font-size: 13px; color: var(--primary); text-decoration: underline; }
+.app-header { text-align: center; padding: 8px 0 16px; }
+.app-header h1 { font-family: 'Playfair Display', serif; color: var(--primary); font-size: 26px; }
+.app-header p { color: var(--gray); font-size: 13px; margin-top: 2px; }
 
-/* Tabs */
-.tabs { display: flex; gap: 0; background: var(--card); border-radius: 12px; overflow: hidden; border: 2px solid var(--border); margin-bottom: 16px; }
-.tab { flex: 1; padding: 11px 8px; text-align: center; font-size: 13px; font-weight: 600; cursor: pointer; background: transparent; border: none; color: var(--gray); font-family: 'Inter', sans-serif; transition: all 0.2s; }
-.tab.active { background: var(--primary); color: #fff; }
+/* Main tabs (Vue / Transactions / Analytics) */
+.main-tabs { display: flex; gap: 6px; background: var(--card); border-radius: 14px; padding: 6px; border: 1px solid var(--border); margin-bottom: 18px; }
+.main-tab { flex: 1; padding: 12px 14px; text-align: center; font-size: 14px; font-weight: 600; cursor: pointer; background: transparent; border: none; color: var(--gray); font-family: 'Inter', sans-serif; transition: all 0.2s; border-radius: 10px; }
+.main-tab.active { background: var(--primary); color: #fff; }
+.main-tab:hover:not(.active) { background: var(--primary-light); color: var(--primary); }
 
-/* Nav */
+/* Period tabs */
+.period-tabs { display: flex; gap: 0; background: var(--card); border-radius: 12px; overflow: hidden; border: 2px solid var(--border); margin-bottom: 14px; }
+.period-tab { flex: 1; padding: 11px 8px; text-align: center; font-size: 13px; font-weight: 600; cursor: pointer; background: transparent; border: none; color: var(--gray); font-family: 'Inter', sans-serif; }
+.period-tab.active { background: var(--primary); color: #fff; }
+
+/* Period nav */
 .nav-row { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 20px; }
 .nav-btn { width: 36px; height: 36px; border-radius: 50%; border: 2px solid var(--border); background: var(--card); font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--primary); }
 .nav-label { font-size: 15px; font-weight: 600; color: var(--primary); min-width: 200px; text-align: center; }
 
-/* Cards */
+/* Sections */
 .section { margin-bottom: 24px; }
 .section-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--gray); margin-bottom: 10px; }
+
+/* KPI grid */
 .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
 .kpi { background: var(--card); border-radius: 12px; padding: 14px; text-align: center; border: 1px solid var(--border); }
 .kpi-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--gray); margin-bottom: 4px; }
@@ -66,6 +76,19 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--tex
 .kpi.highlight .kpi-label { color: rgba(255,255,255,0.7); }
 .kpi.highlight .kpi-value { color: #fff; }
 .kpi.highlight .kpi-sub { color: rgba(255,255,255,0.6); }
+.kpi-grid-3 { grid-template-columns: repeat(3, 1fr); }
+.kpi-grid-2 { grid-template-columns: repeat(2, 1fr); }
+
+/* Status pills */
+.status-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.status-pill { background: var(--card); border-radius: 12px; padding: 14px 16px; border: 1px solid var(--border); display: flex; gap: 10px; align-items: center; }
+.status-pill.ok { border-left: 4px solid var(--green); }
+.status-pill.warn { border-left: 4px solid var(--amber); background: #FFFBEB; }
+.status-pill.bad { border-left: 4px solid var(--red); background: #FEF2F2; }
+.status-pill .icon { font-size: 18px; line-height: 1; }
+.status-pill .body { flex: 1; }
+.status-pill .label { font-size: 12px; color: var(--gray); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+.status-pill .value { font-size: 14px; font-weight: 600; color: var(--text); }
 
 /* Charts */
 .chart-row { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; }
@@ -83,11 +106,13 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--tex
 .badge.esp { background: #FEF3C7; color: #92400E; }
 .badge.cb { background: #DBEAFE; color: #1E40AF; }
 .badge.cheque { background: #E0E7FF; color: #3730A3; }
+.no-data { text-align: center; padding: 40px 20px; color: var(--gray); font-size: 14px; }
 
 /* Actions */
 .actions { display: flex; gap: 10px; flex-wrap: wrap; }
-.btn { padding: 10px 20px; border: none; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; display: flex; align-items: center; gap: 6px; }
+.btn { padding: 10px 20px; border: none; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; display: inline-flex; align-items: center; gap: 6px; }
 .btn-green { background: var(--green); color: white; }
+.btn-primary { background: var(--primary); color: white; }
 .btn-outline { background: var(--card); color: var(--primary); border: 1px solid var(--border); }
 .btn:hover { opacity: 0.9; }
 
@@ -96,10 +121,12 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--tex
 .spinner { display: inline-block; width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* Responsive */
 @media (max-width: 700px) {
   .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .kpi-grid-3 { grid-template-columns: repeat(2, 1fr); }
   .chart-row { grid-template-columns: 1fr; }
+  .main-tab { font-size: 12px; padding: 10px 8px; }
+  .app-header h1 { font-size: 22px; }
 }
 </style>
 </head>
@@ -111,7 +138,7 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--tex
 <div class="login-screen" id="login-screen">
   <div class="login-card">
     <h1>Natura Tif</h1>
-    <p>Analyse des données</p>
+    <p>Cockpit de pilotage</p>
     <input type="password" id="pin-input" placeholder="Code PIN" maxlength="6" inputmode="numeric" autofocus>
     <button onclick="tryLogin()">ACCÉDER</button>
     <div class="login-error" id="login-error"></div>
@@ -121,66 +148,84 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--tex
 <!-- APP -->
 <div class="app" id="app">
   <div class="top-bar">
-    <a href="admin.html" class="admin-link">← Tableau de bord</a>
+    <div class="last-sync" id="last-sync">Connexion…</div>
     <button class="logout" onclick="logout()">Déconnexion</button>
   </div>
   <div class="app-header">
-    <h1>Natura Tif — Analyse</h1>
-    <p id="last-sync">Dernière actualisation : —</p>
+    <h1>Natura Tif — Cockpit</h1>
+    <p>Pilotage opérationnel</p>
   </div>
 
-  <div class="tabs">
-    <button class="tab active" onclick="setPeriod('jour')">Jour</button>
-    <button class="tab" onclick="setPeriod('semaine')">Semaine</button>
-    <button class="tab" onclick="setPeriod('mois')">Mois</button>
-    <button class="tab" onclick="setPeriod('annee')">Année</button>
+  <div class="main-tabs">
+    <button class="main-tab active" data-view="vue" onclick="setView('vue')">Vue d'ensemble</button>
+    <button class="main-tab" data-view="transactions" onclick="setView('transactions')">Transactions</button>
+    <button class="main-tab" data-view="analytics" onclick="setView('analytics')">Analytics</button>
   </div>
 
-  <div class="nav-row">
-    <button class="nav-btn" onclick="navigate(-1)">‹</button>
-    <div class="nav-label" id="nav-label">—</div>
-    <button class="nav-btn" onclick="navigate(1)">›</button>
+  <div id="period-controls" style="display:none;">
+    <div class="period-tabs">
+      <button class="period-tab" data-period="jour" onclick="setPeriod('jour')">Jour</button>
+      <button class="period-tab" data-period="semaine" onclick="setPeriod('semaine')">Semaine</button>
+      <button class="period-tab active" data-period="mois" onclick="setPeriod('mois')">Mois</button>
+      <button class="period-tab" data-period="annee" onclick="setPeriod('annee')">Année</button>
+    </div>
+    <div class="nav-row">
+      <button class="nav-btn" onclick="navigatePeriod(-1)">‹</button>
+      <div class="nav-label" id="nav-label">—</div>
+      <button class="nav-btn" onclick="navigatePeriod(1)">›</button>
+    </div>
   </div>
 
   <div id="content">
-    <div class="loading"><div class="spinner"></div><br>Chargement des données…</div>
+    <div class="loading"><div class="spinner"></div><br>Chargement…</div>
   </div>
 </div>
 
 <script>
-const SB_URL = 'https://rgwsqufbdimryxqefvhx.supabase.co';
-const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJnd3NxdWZiZGltcnl4cWVmdmh4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5NTI4OTQsImV4cCI6MjA5MDUyODg5NH0.VNIY3iq3WZz-SVveQdMMqNth2ZmBP7aoJJ3PhfsmN-0';
-const IS_TEST = (location.hostname === 'localhost' || location.hostname === '127.0.0.1');
-const TX_TABLE = IS_TEST ? 'transactions_test' : 'transactions';
-const PIN = '1234';
+// ==================== CONFIG ====================
+const SUPABASE_URL = 'https://rgwsqufbdimryxqefvhx.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJnd3NxdWZiZGltcnl4cWVmdmh4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5NTI4OTQsImV4cCI6MjA5MDUyODg5NH0.VNIY3iq3WZz-SVveQdMMqNth2ZmBP7aoJJ3PhfsmN-0';
+const PIN_CODE = '1234';
+
 const JOURS = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
-const MOIS_NAMES = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+const MOIS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
 const MOIS_SHORT = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
 const CAT_LABELS = { femme: 'Femme', homme: 'Homme', enfant: 'Enfant' };
 const PAY_LABELS = { especes: 'Espèces', cb: 'CB', cheque: 'Chèque' };
 const COLORS = { femme: '#8B6914', homme: '#5B5723', enfant: '#A8956A', produit: '#D97706', especes: '#7A9B2E', cb: '#4A7AB5', cheque: '#7C6BAF' };
 
-let sb, allTx = [], currentPeriod = 'mois', currentDate = new Date();
+const IS_TEST = (location.hostname === 'localhost' || location.hostname === '127.0.0.1');
+const TX_TABLE = IS_TEST ? 'transactions_test' : 'transactions';
+
+let sb = null;
+let allTx = [];
+let currentView = 'vue';
+let currentPeriod = 'mois';
+let currentDate = new Date();
 let chartBar = null, chartPie = null;
 
-// ==================== AUTH ====================
+// ==================== LOGIN ====================
 document.getElementById('pin-input').addEventListener('keydown', e => { if (e.key === 'Enter') tryLogin(); });
+
 function tryLogin() {
-  if (document.getElementById('pin-input').value === PIN) {
+  const pin = document.getElementById('pin-input').value;
+  if (pin === PIN_CODE) {
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('app').style.display = 'block';
-    sessionStorage.setItem('nt_analytics', '1');
+    sessionStorage.setItem('nt_cockpit', '1');
     init();
   } else {
     document.getElementById('login-error').textContent = 'Code incorrect';
     document.getElementById('pin-input').value = '';
   }
 }
+
 function logout() {
-  sessionStorage.removeItem('nt_analytics');
+  sessionStorage.removeItem('nt_cockpit');
   location.reload();
 }
-if (sessionStorage.getItem('nt_analytics')) {
+
+if (sessionStorage.getItem('nt_cockpit')) {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   init();
@@ -188,7 +233,7 @@ if (sessionStorage.getItem('nt_analytics')) {
 
 // ==================== INIT ====================
 async function init() {
-  sb = window.supabase.createClient(SB_URL, SB_KEY);
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   try { await sb.auth.signInAnonymously(); } catch(e) { console.warn('Auth anonyme:', e); }
   await loadData();
   render();
@@ -199,23 +244,47 @@ async function loadData() {
     const { data, error } = await sb.from(TX_TABLE).select('*').order('date', { ascending: true });
     if (error) throw error;
     allTx = (data || []).map(t => ({ ...t, montant: parseFloat(t.montant) || 0 }));
-    document.getElementById('last-sync').textContent = 'Dernière actualisation : ' + new Date().toLocaleString('fr-FR');
+    document.getElementById('last-sync').textContent = 'Données à jour · ' + new Date().toLocaleString('fr-FR');
   } catch(e) {
-    document.getElementById('content').innerHTML = '<div class="loading">Erreur : ' + e.message + '</div>';
+    document.getElementById('content').innerHTML = '<div class="no-data">Erreur de connexion à Supabase.<br><small>' + e.message + '</small></div>';
   }
 }
 
-// ==================== DATE HELPERS ====================
+// ==================== VIEW SWITCHING ====================
+function setView(v) {
+  currentView = v;
+  document.querySelectorAll('.main-tab').forEach(t => t.classList.toggle('active', t.dataset.view === v));
+  document.getElementById('period-controls').style.display = (v === 'vue') ? 'none' : 'block';
+  render();
+}
+
+function setPeriod(p) {
+  currentPeriod = p;
+  currentDate = new Date();
+  document.querySelectorAll('.period-tab').forEach(t => t.classList.toggle('active', t.dataset.period === p));
+  render();
+}
+
+function navigatePeriod(dir) {
+  const d = currentDate;
+  if (currentPeriod === 'jour') d.setDate(d.getDate() + dir);
+  else if (currentPeriod === 'semaine') d.setDate(d.getDate() + dir * 7);
+  else if (currentPeriod === 'mois') d.setMonth(d.getMonth() + dir);
+  else d.setFullYear(d.getFullYear() + dir);
+  render();
+}
+
+// ==================== HELPERS ====================
 function fmt(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
 function money(n) { return n.toFixed(2).replace('.', ',') + ' €'; }
-function pct(a, b) { return b === 0 ? '—' : ((a - b) / b * 100).toFixed(0) + '%'; }
+function pctOf(v, total) { return total > 0 ? (v / total * 100).toFixed(0) + '%' : ''; }
 
 function getRange() {
   const d = new Date(currentDate);
   let start, end, label, prevStart, prevEnd;
   if (currentPeriod === 'jour') {
     start = end = fmt(d);
-    label = JOURS[d.getDay()] + ' ' + d.getDate() + ' ' + MOIS_NAMES[d.getMonth()] + ' ' + d.getFullYear();
+    label = JOURS[d.getDay()] + ' ' + d.getDate() + ' ' + MOIS[d.getMonth()] + ' ' + d.getFullYear();
     const pd = new Date(d); pd.setDate(pd.getDate() - 1);
     prevStart = prevEnd = fmt(pd);
   } else if (currentPeriod === 'semaine') {
@@ -231,7 +300,7 @@ function getRange() {
     const first = new Date(d.getFullYear(), d.getMonth(), 1);
     const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
     start = fmt(first); end = fmt(last);
-    label = MOIS_NAMES[d.getMonth()] + ' ' + d.getFullYear();
+    label = MOIS[d.getMonth()] + ' ' + d.getFullYear();
     const pf = new Date(d.getFullYear(), d.getMonth() - 1, 1);
     const pl = new Date(d.getFullYear(), d.getMonth(), 0);
     prevStart = fmt(pf); prevEnd = fmt(pl);
@@ -243,27 +312,155 @@ function getRange() {
   return { start, end, label, prevStart, prevEnd };
 }
 
-function setPeriod(p) {
-  currentPeriod = p;
-  currentDate = new Date();
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.querySelector(`.tab[onclick="setPeriod('${p}')"]`).classList.add('active');
-  render();
-}
-function navigate(dir) {
-  const d = currentDate;
-  if (currentPeriod === 'jour') d.setDate(d.getDate() + dir);
-  else if (currentPeriod === 'semaine') d.setDate(d.getDate() + dir * 7);
-  else if (currentPeriod === 'mois') d.setMonth(d.getMonth() + dir);
-  else d.setFullYear(d.getFullYear() + dir);
-  render();
+function compareSub(curr, prev) {
+  if (prev === 0 && curr === 0) return '';
+  if (prev === 0) return '+100%';
+  const diff = ((curr - prev) / prev * 100).toFixed(0);
+  return (diff >= 0 ? '+' : '') + diff + '% vs préc.';
 }
 
-// ==================== RENDER ====================
+function kpi(label, value, sub, highlight) {
+  const subClass = sub && sub.startsWith('+') ? 'up' : sub && sub.startsWith('-') ? 'down' : '';
+  return `<div class="kpi${highlight ? ' highlight' : ''}"><div class="kpi-label">${label}</div><div class="kpi-value">${value}</div>${sub ? '<div class="kpi-sub ' + subClass + '">' + sub + '</div>' : ''}</div>`;
+}
+
+// ==================== ROUTER ====================
 function render() {
-  const { start, end, label, prevStart, prevEnd } = getRange();
+  const { start, end, label } = getRange();
   document.getElementById('nav-label').textContent = label;
+  if (currentView === 'vue') return renderVue();
+  if (currentView === 'transactions') return renderTransactions();
+  if (currentView === 'analytics') return renderAnalytics();
+}
 
+// ==================== VUE D'ENSEMBLE ====================
+function renderVue() {
+  const today = fmt(new Date());
+  const now = new Date();
+  const monthStart = fmt(new Date(now.getFullYear(), now.getMonth(), 1));
+  const monthEnd = fmt(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+
+  const todayTx = allTx.filter(t => t.date === today);
+  const monthTx = allTx.filter(t => t.date >= monthStart && t.date <= monthEnd);
+
+  const todayCA = todayTx.reduce((s, t) => s + t.montant, 0);
+  const monthCA = monthTx.reduce((s, t) => s + t.montant, 0);
+  const todaySessions = new Set(todayTx.map(t => t.session_id || t.id)).size;
+  const monthSessions = new Set(monthTx.map(t => t.session_id || t.id)).size;
+  const monthAvg = monthSessions > 0 ? monthCA / monthSessions : 0;
+
+  // État de l'app
+  const lastSyncTx = allTx.length ? allTx.reduce((m, t) => (t.synced_at && t.synced_at > m) ? t.synced_at : m, '') : '';
+  const lastSyncDate = lastSyncTx ? new Date(lastSyncTx) : null;
+  const hoursSinceSync = lastSyncDate ? (Date.now() - lastSyncDate.getTime()) / 3600000 : null;
+  let syncStatus = 'ok', syncLabel = 'Sync OK', syncValue = 'à l\'instant';
+  if (hoursSinceSync == null) {
+    syncStatus = 'warn'; syncValue = 'aucune sync';
+  } else if (hoursSinceSync < 1) {
+    syncValue = Math.round(hoursSinceSync * 60) + ' min';
+  } else if (hoursSinceSync < 48) {
+    syncValue = hoursSinceSync.toFixed(1) + ' h';
+    if (hoursSinceSync > 24) syncStatus = 'warn';
+  } else {
+    syncStatus = 'bad'; syncValue = (hoursSinceSync / 24).toFixed(1) + ' j';
+  }
+
+  const totalRows = allTx.length;
+  const env = IS_TEST ? 'TEST · transactions_test' : 'PROD · transactions';
+
+  let html = '';
+
+  // KPIs jour
+  html += '<div class="section"><div class="section-title">Aujourd\'hui</div><div class="kpi-grid kpi-grid-3">';
+  html += kpi('CA du jour', money(todayCA), todayTx.length ? todayTx.length + ' transaction' + (todayTx.length>1?'s':'') : 'aucune transaction', true);
+  html += kpi('Encaissements', todaySessions, '');
+  html += kpi('Panier moyen', todaySessions > 0 ? money(todayCA / todaySessions) : '—', '');
+  html += '</div></div>';
+
+  // KPIs mois
+  html += '<div class="section"><div class="section-title">Mois en cours · ' + MOIS[now.getMonth()] + ' ' + now.getFullYear() + '</div><div class="kpi-grid">';
+  html += kpi('CA du mois', money(monthCA), '', false);
+  html += kpi('Encaissements', monthSessions, '');
+  html += kpi('Panier moyen', money(monthAvg), '');
+  html += kpi('Jours actifs', new Set(monthTx.map(t => t.date)).size, 'sur ' + new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate());
+  html += '</div></div>';
+
+  // État système
+  html += '<div class="section"><div class="section-title">État du système</div><div class="status-row">';
+  html += '<div class="status-pill ' + syncStatus + '"><div class="icon">' + (syncStatus==='ok'?'✓':syncStatus==='warn'?'!':'⚠') + '</div><div class="body"><div class="label">Dernière sync</div><div class="value">il y a ' + syncValue + '</div></div></div>';
+  html += '<div class="status-pill ok"><div class="icon">🔒</div><div class="body"><div class="label">Sécurité RLS</div><div class="value">Auth anonyme + RLS strict</div></div></div>';
+  html += '<div class="status-pill ok"><div class="icon">📊</div><div class="body"><div class="label">Lignes en base</div><div class="value">' + totalRows + ' transactions</div></div></div>';
+  html += '<div class="status-pill ' + (IS_TEST ? 'warn' : 'ok') + '"><div class="icon">' + (IS_TEST ? '🧪' : '🚀') + '</div><div class="body"><div class="label">Environnement</div><div class="value">' + env + '</div></div></div>';
+  html += '</div></div>';
+
+  // Actions rapides
+  html += '<div class="section"><div class="section-title">Actions rapides</div><div class="actions">';
+  html += '<button class="btn btn-primary" onclick="setView(\'transactions\')">Voir les transactions →</button>';
+  html += '<button class="btn btn-primary" onclick="setView(\'analytics\')">Voir les analyses →</button>';
+  html += '<button class="btn btn-outline" onclick="loadData().then(render)">↻ Actualiser</button>';
+  html += '</div></div>';
+
+  document.getElementById('content').innerHTML = html;
+}
+
+// ==================== TRANSACTIONS ====================
+function renderTransactions() {
+  const { start, end } = getRange();
+  const txs = allTx.filter(t => t.date >= start && t.date <= end);
+
+  // Stats
+  const totalCA = txs.reduce((s, t) => s + t.montant, 0);
+  const nbEncaiss = new Set(txs.map(t => t.session_id || t.id)).size;
+  const byCat = { femme: 0, homme: 0, enfant: 0 };
+  const byPay = { especes: 0, cb: 0, cheque: 0 };
+  let totalProduits = 0;
+  txs.forEach(t => {
+    if (t.type === 'produit') totalProduits += t.montant;
+    else if (byCat[t.categorie] !== undefined) byCat[t.categorie] += t.montant;
+    if (byPay[t.paiement] !== undefined) byPay[t.paiement] += t.montant;
+  });
+
+  let html = '';
+
+  html += '<div class="section"><div class="kpi-grid kpi-grid-3">';
+  html += kpi('Chiffre d\'affaires', money(totalCA), nbEncaiss + ' encaissement' + (nbEncaiss>1?'s':''), true);
+  html += kpi('Panier moyen', nbEncaiss > 0 ? money(totalCA / nbEncaiss) : '—', '');
+  html += kpi('Produits', money(totalProduits), pctOf(totalProduits, totalCA));
+  html += '</div></div>';
+
+  html += '<div class="section"><div class="section-title">Détail par catégorie</div><div class="kpi-grid">';
+  html += kpi('Femme', money(byCat.femme), pctOf(byCat.femme, totalCA));
+  html += kpi('Homme', money(byCat.homme), pctOf(byCat.homme, totalCA));
+  html += kpi('Enfant', money(byCat.enfant), pctOf(byCat.enfant, totalCA));
+  html += kpi('Produits', money(totalProduits), pctOf(totalProduits, totalCA));
+  html += '</div></div>';
+
+  html += '<div class="section"><div class="section-title">Modes de paiement</div><div class="kpi-grid kpi-grid-3">';
+  html += kpi('Espèces', money(byPay.especes), pctOf(byPay.especes, totalCA));
+  html += kpi('CB', money(byPay.cb), pctOf(byPay.cb, totalCA));
+  html += kpi('Chèque', money(byPay.cheque), pctOf(byPay.cheque, totalCA));
+  html += '</div></div>';
+
+  // Table
+  html += '<div class="section"><div class="section-title">Transactions (' + txs.length + ')</div>';
+  if (txs.length > 0) {
+    html += buildTable(txs);
+  } else {
+    html += '<div class="no-data">Aucune transaction sur cette période</div>';
+  }
+  html += '</div>';
+
+  // Actions
+  html += '<div class="actions" style="margin-top:8px;">';
+  html += '<button class="btn btn-outline" onclick="loadData().then(render)">↻ Actualiser</button>';
+  html += '</div>';
+
+  document.getElementById('content').innerHTML = html;
+}
+
+// ==================== ANALYTICS ====================
+function renderAnalytics() {
+  const { start, end, prevStart, prevEnd } = getRange();
   const txs = allTx.filter(t => t.date >= start && t.date <= end);
   const prevTxs = allTx.filter(t => t.date >= prevStart && t.date <= prevEnd);
 
@@ -275,18 +472,10 @@ function render() {
   const prevAvg = prevSessions > 0 ? prevCA / prevSessions : 0;
   const prodTotal = txs.filter(t => t.type === 'produit').reduce((s, t) => s + t.montant, 0);
 
-  // Category & payment breakdown
-  const byCat = { femme: 0, homme: 0, enfant: 0 };
-  const byPay = { especes: 0, cb: 0, cheque: 0 };
-  txs.forEach(t => {
-    if (t.type !== 'produit' && byCat[t.categorie] !== undefined) byCat[t.categorie] += t.montant;
-    if (byPay[t.paiement] !== undefined) byPay[t.paiement] += t.montant;
-  });
-
   let html = '';
 
-  // KPIs
-  html += '<div class="section"><div class="section-title">Indicateurs clés</div><div class="kpi-grid">';
+  // KPIs avec comparaison
+  html += '<div class="section"><div class="section-title">Indicateurs (vs période précédente)</div><div class="kpi-grid">';
   html += kpi('Chiffre d\'affaires', money(ca), compareSub(ca, prevCA), true);
   html += kpi('Encaissements', sessions, compareSub(sessions, prevSessions));
   html += kpi('Panier moyen', money(avg), compareSub(avg, prevAvg));
@@ -299,31 +488,16 @@ function render() {
   html += '<div class="chart-card"><h3>Répartition</h3><canvas id="chart-pie"></canvas></div>';
   html += '</div></div>';
 
-  // Category & Payment cards
-  html += '<div class="section"><div class="section-title">Détail par catégorie et paiement</div><div class="kpi-grid">';
-  html += kpi('Femme', money(byCat.femme), pctOf(byCat.femme, ca));
-  html += kpi('Homme', money(byCat.homme), pctOf(byCat.homme, ca));
-  html += kpi('Enfant', money(byCat.enfant), pctOf(byCat.enfant, ca));
-  html += kpi('Produits', money(prodTotal), pctOf(prodTotal, ca));
-  html += kpi('Espèces', money(byPay.especes), pctOf(byPay.especes, ca));
-  html += kpi('CB', money(byPay.cb), pctOf(byPay.cb, ca));
-  html += kpi('Chèque', money(byPay.cheque), pctOf(byPay.cheque, ca));
-  html += kpi('Moy./encaiss.', money(avg), '');
-  html += '</div></div>';
-
   // Table
   html += '<div class="section"><div class="section-title">Transactions (' + txs.length + ')</div>';
-  if (txs.length > 0) {
-    html += buildTable(txs);
-  } else {
-    html += '<div class="loading">Aucune transaction</div>';
-  }
+  if (txs.length > 0) html += buildTable(txs);
+  else html += '<div class="no-data">Aucune transaction</div>';
   html += '</div>';
 
   // Actions
   html += '<div class="section"><div class="section-title">Exporter</div><div class="actions">';
-  html += '<button class="btn btn-green" onclick="downloadCSV()">⬇ Télécharger CSV</button>';
-  html += '<button class="btn btn-outline" onclick="downloadCSVAll()">⬇ CSV complet (toutes les données)</button>';
+  html += '<button class="btn btn-green" onclick="downloadCSV()">⬇ CSV de la période</button>';
+  html += '<button class="btn btn-outline" onclick="downloadCSVAll()">⬇ CSV complet</button>';
   html += '<button class="btn btn-outline" onclick="loadData().then(render)">↻ Actualiser</button>';
   html += '</div></div>';
 
@@ -331,22 +505,14 @@ function render() {
   buildCharts(txs, start, end);
 }
 
-function kpi(label, value, sub, highlight) {
-  return `<div class="kpi${highlight ? ' highlight' : ''}"><div class="kpi-label">${label}</div><div class="kpi-value">${value}</div>${sub ? '<div class="kpi-sub ' + (sub.includes('+') ? 'up' : sub.includes('-') ? 'down' : '') + '">' + sub + '</div>' : ''}</div>`;
-}
-function compareSub(curr, prev) {
-  if (prev === 0 && curr === 0) return '';
-  if (prev === 0) return '+100%';
-  const diff = ((curr - prev) / prev * 100).toFixed(0);
-  return (diff >= 0 ? '+' : '') + diff + '% vs préc.';
-}
-function pctOf(v, total) { return total > 0 ? (v / total * 100).toFixed(0) + '%' : ''; }
-
+// ==================== TABLE ====================
 function buildTable(txs) {
   const groups = [], seen = {};
-  txs.forEach(t => {
+  const sorted = [...txs].sort((a, b) => (a.date + (a.heure||'')).localeCompare(b.date + (b.heure||'')));
+  sorted.forEach(t => {
     const k = t.session_id || t.id;
-    if (!seen[k]) { seen[k] = { txs: [t], key: k }; groups.push(seen[k]); } else { seen[k].txs.push(t); }
+    if (!seen[k]) { seen[k] = { txs: [t], key: k }; groups.push(seen[k]); }
+    else seen[k].txs.push(t);
   });
 
   let html = '<div class="table-card"><table><thead><tr><th>Date</th><th>Heure</th><th>Cat.</th><th>Détail</th><th>Total</th><th>Paiem.</th></tr></thead><tbody>';
@@ -366,10 +532,9 @@ function buildTable(txs) {
 
 // ==================== CHARTS ====================
 function buildCharts(txs, start, end) {
-  if (chartBar) chartBar.destroy();
-  if (chartPie) chartPie.destroy();
+  if (chartBar) { chartBar.destroy(); chartBar = null; }
+  if (chartPie) { chartPie.destroy(); chartPie = null; }
 
-  // Bar chart: CA per sub-period
   const barData = getBarData(txs, start, end);
   const barCtx = document.getElementById('chart-bar');
   if (barCtx) {
@@ -378,12 +543,8 @@ function buildCharts(txs, start, end) {
       data: {
         labels: barData.labels,
         datasets: [{
-          label: 'CA',
-          data: barData.values,
-          backgroundColor: '#7A9B2E88',
-          borderColor: '#7A9B2E',
-          borderWidth: 1,
-          borderRadius: 4
+          label: 'CA', data: barData.values,
+          backgroundColor: '#7A9B2E88', borderColor: '#7A9B2E', borderWidth: 1, borderRadius: 4
         }]
       },
       options: {
@@ -397,7 +558,6 @@ function buildCharts(txs, start, end) {
     });
   }
 
-  // Pie chart: by category
   const catData = {};
   txs.forEach(t => {
     const key = t.type === 'produit' ? 'produit' : (t.categorie || 'autre');
@@ -411,16 +571,8 @@ function buildCharts(txs, start, end) {
   if (pieCtx && pieValues.some(v => v > 0)) {
     chartPie = new Chart(pieCtx, {
       type: 'doughnut',
-      data: {
-        labels: pieLabels,
-        datasets: [{ data: pieValues, backgroundColor: pieColors, borderWidth: 2, borderColor: '#fff' }]
-      },
-      options: {
-        responsive: true,
-        plugins: {
-          legend: { position: 'bottom', labels: { padding: 12, font: { size: 12 } } }
-        }
-      }
+      data: { labels: pieLabels, datasets: [{ data: pieValues, backgroundColor: pieColors, borderWidth: 2, borderColor: '#fff' }] },
+      options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { padding: 12, font: { size: 12 } } } } }
     });
   }
 }
@@ -428,27 +580,20 @@ function buildCharts(txs, start, end) {
 function getBarData(txs, start, end) {
   const labels = [], values = [];
   if (currentPeriod === 'jour') {
-    // By hour
     const byHour = {};
     txs.forEach(t => { const h = (t.heure || '00:00').split(':')[0]; byHour[h] = (byHour[h] || 0) + t.montant; });
     for (let h = 7; h <= 20; h++) { const k = String(h).padStart(2, '0'); labels.push(k + 'h'); values.push(byHour[k] || 0); }
   } else if (currentPeriod === 'semaine') {
-    // By day of week
     const dayNames = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
     const byDay = {};
-    txs.forEach(t => {
-      const d = new Date(t.date); const dow = (d.getDay() + 6) % 7;
-      byDay[dow] = (byDay[dow] || 0) + t.montant;
-    });
+    txs.forEach(t => { const d = new Date(t.date); const dow = (d.getDay() + 6) % 7; byDay[dow] = (byDay[dow] || 0) + t.montant; });
     for (let i = 0; i < 7; i++) { labels.push(dayNames[i]); values.push(byDay[i] || 0); }
   } else if (currentPeriod === 'mois') {
-    // By day of month
     const byDay = {};
     txs.forEach(t => { const d = parseInt(t.date.split('-')[2]); byDay[d] = (byDay[d] || 0) + t.montant; });
     const lastDay = parseInt(end.split('-')[2]);
     for (let d = 1; d <= lastDay; d++) { labels.push(d); values.push(byDay[d] || 0); }
   } else {
-    // By month
     const byMonth = {};
     txs.forEach(t => { const m = parseInt(t.date.split('-')[1]) - 1; byMonth[m] = (byMonth[m] || 0) + t.montant; });
     for (let m = 0; m < 12; m++) { labels.push(MOIS_SHORT[m]); values.push(byMonth[m] || 0); }
@@ -462,17 +607,14 @@ function downloadCSV() {
   const txs = allTx.filter(t => t.date >= start && t.date <= end);
   generateCSV(txs, 'natura-tif_' + start + '_' + end + '.csv');
 }
-
-function downloadCSVAll() {
-  generateCSV(allTx, 'natura-tif_complet.csv');
-}
+function downloadCSVAll() { generateCSV(allTx, 'natura-tif_complet.csv'); }
 
 function generateCSV(txs, filename) {
   const header = 'Date;Heure;Catégorie;Type;Désignation;Montant;Paiement;Session ID\n';
   const rows = txs.map(t =>
     [t.date, t.heure || '', CAT_LABELS[t.categorie] || t.categorie, t.type || 'prestation', '"' + (t.prestation || '').replace(/"/g, '""') + '"', String(t.montant).replace('.', ','), PAY_LABELS[t.paiement] || t.paiement, t.session_id || ''].join(';')
   ).join('\n');
-  const bom = '\uFEFF';
+  const bom = '﻿';
   const blob = new Blob([bom + header + rows], { type: 'text/csv;charset=utf-8;' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
