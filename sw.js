@@ -1,4 +1,4 @@
-const CACHE_NAME = 'natura-tif-v9';
+const CACHE_NAME = 'natura-tif-v10';
 const URLS_TO_CACHE = [
   './',
   './index.html',
@@ -10,19 +10,16 @@ const URLS_TO_CACHE = [
   'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js',
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js'
 ];
-
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(URLS_TO_CACHE)));
   self.skipWaiting();
 });
-
 self.addEventListener('activate', event => {
   event.waitUntil(caches.keys().then(keys =>
     Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
   ));
   self.clients.claim();
 });
-
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
   if (event.request.destination === 'document' || url.pathname.endsWith('.html') || url.pathname.endsWith('/')) {

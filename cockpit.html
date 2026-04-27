@@ -162,6 +162,7 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--tex
     <button class="main-tab" data-view="analytics" onclick="setView('analytics')">Analytics</button>
     <button class="main-tab" data-view="securite" onclick="setView('securite')">Sécurité</button>
     <button class="main-tab" data-view="backup" onclick="setView('backup')">Backup</button>
+    <button class="main-tab" data-view="deploy" onclick="setView('deploy')">Deploy</button>
   </div>
 
   <div id="period-controls" style="display:none;">
@@ -256,7 +257,7 @@ async function loadData() {
 function setView(v) {
   currentView = v;
   document.querySelectorAll('.main-tab').forEach(t => t.classList.toggle('active', t.dataset.view === v));
-  document.getElementById('period-controls').style.display = (v === 'vue' || v === 'securite' || v === 'backup') ? 'none' : 'block';
+  document.getElementById('period-controls').style.display = (v === 'vue' || v === 'securite' || v === 'backup' || v === 'deploy') ? 'none' : 'block';
   render();
 }
 
@@ -335,6 +336,7 @@ function render() {
   if (currentView === 'analytics') return renderAnalytics();
   if (currentView === 'securite') return renderSecurity();
   if (currentView === 'backup') return renderBackup();
+  if (currentView === 'deploy') return renderDeploy();
 }
 
 // ==================== VUE D'ENSEMBLE ====================
@@ -745,6 +747,134 @@ async function triggerBackup(table) {
   } catch(e) {
     out.innerHTML = '<div class="status-pill bad"><div class="icon">⚠</div><div class="body"><div class="label">Échec</div><div class="value">' + e.message + '</div></div></div>';
     if (btn) { btn.disabled = false; btn.textContent = '📸 Snapshot ' + table + ' maintenant'; }
+  }
+}
+
+// ==================== DEPLOY ====================
+async function renderDeploy() {
+  const el = document.getElementById('content');
+
+  if (!IS_TEST) {
+    // Mode prod : pas de backend → instructions
+    el.innerHTML = '<div class="section"><div class="status-pill warn"><div class="icon">!</div><div class="body"><div class="label">Mode prod (GitHub Pages)</div><div class="value">Le déploiement nécessite le serveur Python local.</div></div></div></div>'
+      + '<div class="section"><div class="section-title">Comment déployer</div>'
+      + '<ol style="line-height:1.8;font-size:14px;color:var(--text);padding-left:20px;">'
+      + '<li>Sur ton PC, lance <span style="font-family:monospace;background:var(--primary-light);padding:2px 6px;border-radius:4px;">start_server.bat</span></li>'
+      + '<li>Ouvre <span style="font-family:monospace;background:var(--primary-light);padding:2px 6px;border-radius:4px;">http://localhost:8766/cockpit.html</span> et reviens ici</li>'
+      + '<li>OU lance directement <span style="font-family:monospace;background:var(--primary-light);padding:2px 6px;border-radius:4px;">python scripts/deploy.py -m "ton message"</span></li>'
+      + '</ol></div>';
+    return;
+  }
+
+  el.innerHTML = '<div class="loading"><div class="spinner"></div><br>Pre-deploy checks…</div>';
+
+  // Pre-deploy checks via /api/predeploy
+  let predeployData = null, predeployError = null;
+  try {
+    const r = await fetch('/api/predeploy');
+    if (r.ok) predeployData = await r.json();
+    else { const txt = await r.text(); predeployError = 'serveur a renvoyé ' + r.status + ' : ' + txt.slice(0, 200); }
+  } catch(e) { predeployError = e.message; }
+
+  let html = '';
+
+  if (predeployError) {
+    html += '<div class="section"><div class="status-pill bad"><div class="icon">⚠</div><div class="body"><div class="label">Pre-deploy checks impossibles</div><div class="value">' + predeployError + '</div></div></div></div>';
+    el.innerHTML = html;
+    return;
+  }
+
+  const checks = predeployData && (predeployData.all_checks || []);
+  const failed = checks.filter(c => !c.ok);
+  const passed = checks.filter(c => c.ok);
+  const verdict = failed.length === 0 ? 'ok' : 'bad';
+
+  // Verdict
+  html += '<div class="section"><div class="status-pill ' + verdict + '">'
+       + '<div class="icon" style="font-size:24px">' + (verdict==='ok'?'✓':'⚠') + '</div>'
+       + '<div class="body"><div class="label">Pre-deploy checks</div>'
+       + '<div class="value" style="font-size:18px">' + (verdict==='ok' ? passed.length + ' checks passés' : failed.length + ' check(s) en échec — déploiement bloqué') + '</div></div></div></div>';
+
+  // Liste des checks
+  html += '<div class="section"><div class="section-title">Détail des vérifications</div><div class="status-row">';
+  checks.forEach(c => {
+    const cls = c.ok ? 'ok' : 'bad';
+    const icon = c.ok ? '✓' : '⚠';
+    const detail = c.ok ? (c.detail || '') : (c.reason || '?');
+    html += '<div class="status-pill ' + cls + '"><div class="icon">' + icon + '</div><div class="body"><div class="label">' + c.name + '</div><div class="value">' + detail + '</div></div></div>';
+  });
+  html += '</div></div>';
+
+  // Fichiers à déployer (si check diff vs remote a réussi)
+  const diffCheck = checks.find(c => c.name === 'Diff vs remote');
+  if (diffCheck && diffCheck.changed_files) {
+    html += '<div class="section"><div class="section-title">Fichiers à déployer (' + diffCheck.changed_files.length + ')</div>';
+    if (diffCheck.changed_files.length === 0) {
+      html += '<div class="no-data">Rien à déployer (le local est aligné avec le remote).</div>';
+    } else {
+      html += '<div class="table-card" style="padding:12px;font-family:monospace;font-size:13px;">';
+      html += diffCheck.changed_files.map(f => '<div>• ' + f + '</div>').join('');
+      html += '</div>';
+      if (diffCheck.asset_changed) {
+        html += '<p style="font-size:12px;color:var(--gray);margin-top:8px;">⚠ Au moins un asset a changé → <strong>sw.js sera bumpé automatiquement</strong> avant le push.</p>';
+      }
+    }
+    html += '</div>';
+  }
+
+  // Formulaire de déploiement
+  const canDeploy = failed.length === 0 && diffCheck && diffCheck.changed_files && diffCheck.changed_files.length > 0;
+  html += '<div class="section"><div class="section-title">Lancer le déploiement</div>';
+  html += '<input type="text" id="deploy-msg" placeholder="Ex: ajout du contrôle matinal" style="width:100%;padding:12px 14px;border:2px solid var(--border);border-radius:10px;font-size:14px;font-family:Inter,sans-serif;outline:none;margin-bottom:10px;" />';
+  html += '<div id="deploy-result" style="margin-bottom:10px;"></div>';
+  html += '<div class="actions">';
+  if (canDeploy) {
+    html += '<button class="btn btn-primary" id="btn-deploy" onclick="triggerDeploy(false)">🚀 Déployer en prod</button>';
+  } else {
+    html += '<button class="btn btn-outline" disabled style="opacity:0.5;cursor:not-allowed">🚀 Déploiement bloqué</button>';
+  }
+  html += '<button class="btn btn-outline" onclick="renderDeploy()">↻ Refaire les checks</button>';
+  if (failed.length > 0) {
+    html += '<button class="btn btn-outline" onclick="triggerDeploy(true)" style="border-color:var(--red);color:var(--red);">⚠ Forcer (déconseillé)</button>';
+  }
+  html += '</div>';
+  if (failed.length > 0) {
+    html += '<p style="font-size:12px;color:var(--red);margin-top:8px;">Les checks rouges signalent un risque pour Gaëlle (RLS cassée, app sans signInAnonymously, etc.). Forcer = casser potentiellement la prod.</p>';
+  }
+  html += '</div>';
+
+  // URL prod
+  html += '<div class="section"><div class="section-title">Prod</div>';
+  html += '<div class="status-pill ok"><div class="icon">🌐</div><div class="body"><div class="label">URL publique</div><div class="value"><a href="https://oxen19430.github.io/natura-tif/" target="_blank" style="color:var(--primary);">https://oxen19430.github.io/natura-tif/</a></div></div></div>';
+  html += '</div>';
+
+  el.innerHTML = html;
+}
+
+async function triggerDeploy(force) {
+  const btn = document.getElementById('btn-deploy');
+  const out = document.getElementById('deploy-result');
+  const msg = (document.getElementById('deploy-msg').value || '').trim();
+  if (!msg) {
+    out.innerHTML = '<div class="status-pill warn"><div class="icon">!</div><div class="body"><div class="label">Message requis</div><div class="value">Décris en une phrase ce que ce déploiement apporte.</div></div></div>';
+    return;
+  }
+  if (btn) { btn.disabled = true; btn.textContent = 'Déploiement en cours…'; }
+  out.innerHTML = '<div class="status-pill ok"><div class="icon">⏳</div><div class="body"><div class="label">En cours</div><div class="value">Bump sw.js, clone, copy, commit, push…</div></div></div>';
+
+  try {
+    const r = await fetch('/api/deploy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: msg, force: force })
+    });
+    const data = await r.json();
+    if (!r.ok || !data.ok) throw new Error((data.error || data.step || 'erreur inconnue') + (data.failed ? ' : ' + data.failed.map(c => c.name).join(', ') : ''));
+    out.innerHTML = '<div class="status-pill ok"><div class="icon">✓</div><div class="body"><div class="label">Déployé · commit ' + (data.commit_hash || '?') + '</div><div class="value">sw.js v' + (data.sw_version || '?') + (data.asset_bumped ? ' (auto-bump)' : '') + ' · ' + (data.changed_files ? data.changed_files.length : '?') + ' fichier(s) · GitHub Pages déploiera dans 30-60 s</div></div></div>';
+    setTimeout(() => renderDeploy(), 3000);
+  } catch(e) {
+    out.innerHTML = '<div class="status-pill bad"><div class="icon">⚠</div><div class="body"><div class="label">Échec</div><div class="value">' + e.message + '</div></div></div>';
+    if (btn) { btn.disabled = false; btn.textContent = '🚀 Déployer en prod'; }
   }
 }
 

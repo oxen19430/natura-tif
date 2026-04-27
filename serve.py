@@ -2,11 +2,12 @@
 """
 Serveur local de développement pour Natura Tif.
 
-- Sert les fichiers statiques de l'app (cache désactivé pour voir les modifs immédiatement)
-- /api/status            : état git (changements non déployés, commits ahead, dernier commit)
-- /api/deploy   (POST)   : commit + push vers GitHub
-- /api/backup   (POST)   : déclenche scripts/backup.py et renvoie le résultat
-- /api/backups  (GET)    : liste les snapshots (lit backups/_index.json)
+Endpoints :
+- GET  /api/status            : (legacy) compatibilité
+- GET  /api/predeploy         : pre-deploy checks via scripts/deploy.py --dry-run
+- POST /api/deploy            : commit + push via scripts/deploy.py
+- POST /api/backup            : snapshot via scripts/backup.py
+- GET  /api/backups           : liste des snapshots
 """
 import http.server
 import json
@@ -21,8 +22,8 @@ PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 BACKUPS_DIR = os.path.join(PROJECT_DIR, 'backups')
 
 
-def run_git(*args):
-    return subprocess.run(['git'] + list(args), cwd=PROJECT_DIR, capture_output=True, text=True)
+def run_subproc(args, timeout=180):
+    return subprocess.run(args, cwd=PROJECT_DIR, capture_output=True, text=True, timeout=timeout)
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -44,7 +45,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path == '/api/status':
-            return self.handle_status()
+            return self.handle_status_legacy()
+        if parsed.path == '/api/predeploy':
+            return self.handle_predeploy()
         if parsed.path == '/api/backups':
             return self.handle_backups_list()
         return super().do_GET()
@@ -63,25 +66,39 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return self.handle_backup()
         self._send_json(404, {'error': 'not found'})
 
-    # ===== /api/status =====
-    def handle_status(self):
-        status = run_git('status', '--porcelain')
-        if status.returncode != 0:
-            return self._send_json(500, {'error': status.stderr.strip()})
-        lines = [l for l in status.stdout.splitlines() if l.strip()]
-        relevant = [l for l in lines if not l.startswith('??') or any(l.endswith(ext) for ext in ('.html', '.js', '.json', '.png', '.py', '.md'))]
-        last = run_git('log', '-1', '--format=%h %s (%cr)')
-        ahead = run_git('rev-list', '--count', '@{u}..HEAD')
-        ahead_n = int(ahead.stdout.strip() or '0') if ahead.returncode == 0 else 0
+    # ===== /api/status (legacy compatibilité minimale) =====
+    def handle_status_legacy(self):
+        # Compat avec ancien admin.html : on dit qu'il y a "rien à déployer" sans infos git
+        # car ce dossier n'est plus le repo (le repo vit sur le MacBook / GitHub).
         return self._send_json(200, {
-            'changed_files': [l[3:] if len(l) > 3 else l for l in relevant],
-            'changed_count': len(relevant),
-            'commits_ahead': ahead_n,
-            'last_commit': last.stdout.strip(),
-            'has_changes_to_deploy': len(relevant) > 0 or ahead_n > 0,
+            'changed_files': [], 'changed_count': 0, 'commits_ahead': 0,
+            'last_commit': '(repo source: github.com/oxen19430/natura-tif)',
+            'has_changes_to_deploy': False,
+            'note': 'Utilise /api/predeploy pour les checks réels',
         })
 
-    # ===== /api/deploy =====
+    # ===== /api/predeploy (GET) — checks live =====
+    def handle_predeploy(self):
+        script = os.path.join(PROJECT_DIR, 'scripts', 'deploy.py')
+        if not os.path.exists(script):
+            return self._send_json(500, {'error': 'scripts/deploy.py not found'})
+        # On lance --dry-run --quiet --message "predeploy-check" --force pour récupérer les checks même si rouge
+        # Note : --force passe outre, mais on récupère bien la liste des checks
+        cmd = [sys.executable, script, '--message', 'predeploy-check', '--dry-run', '--quiet', '--force']
+        try:
+            proc = run_subproc(cmd, timeout=60)
+        except subprocess.TimeoutExpired:
+            return self._send_json(504, {'error': 'predeploy timeout'})
+        out = proc.stdout.strip().splitlines()
+        # En --dry-run + --force, on récupère le résultat final qui contient les checks
+        last_line = out[-1] if out else '{}'
+        try:
+            data = json.loads(last_line)
+        except json.JSONDecodeError:
+            return self._send_json(500, {'error': 'parse error', 'stdout': proc.stdout, 'stderr': proc.stderr})
+        return self._send_json(200, data)
+
+    # ===== /api/deploy (POST) — push réel =====
     def handle_deploy(self):
         length = int(self.headers.get('Content-Length', '0') or 0)
         raw = self.rfile.read(length).decode('utf-8') if length else '{}'
@@ -89,36 +106,40 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             payload = json.loads(raw)
         except json.JSONDecodeError:
             payload = {}
-        message = (payload.get('message') or '').strip() or 'Update from local test environment'
+        message = (payload.get('message') or '').strip()
+        if not message:
+            return self._send_json(400, {'error': 'message required'})
+        force = bool(payload.get('force'))
+        no_bump = bool(payload.get('no_bump'))
 
-        add = run_git('add', '-u')
-        if add.returncode != 0:
-            return self._send_json(500, {'step': 'add', 'error': add.stderr.strip()})
-        for fname in ('index.html', 'sw.js', 'manifest.json', 'cockpit.html', 'icon-192.png', 'icon-512.png'):
-            run_git('add', fname)
+        script = os.path.join(PROJECT_DIR, 'scripts', 'deploy.py')
+        if not os.path.exists(script):
+            return self._send_json(500, {'error': 'scripts/deploy.py not found'})
+        cmd = [sys.executable, script, '--message', message, '--quiet']
+        if force:
+            cmd.append('--force')
+        if no_bump:
+            cmd.append('--no-bump')
 
-        diff = run_git('diff', '--cached', '--quiet')
-        had_staged = diff.returncode == 1
-        commit_output = ''
-        if had_staged:
-            commit = run_git('commit', '-m', message)
-            commit_output = commit.stdout.strip() + '\n' + commit.stderr.strip()
-            if commit.returncode != 0:
-                return self._send_json(500, {'step': 'commit', 'error': commit_output})
+        try:
+            proc = run_subproc(cmd, timeout=180)
+        except subprocess.TimeoutExpired:
+            return self._send_json(504, {'error': 'deploy timeout'})
 
-        push = run_git('push', 'origin', 'HEAD')
-        if push.returncode != 0:
-            return self._send_json(500, {'step': 'push', 'error': push.stderr.strip(), 'out': push.stdout.strip()})
+        out = proc.stdout.strip().splitlines()
+        last_line = out[-1] if out else '{}'
+        try:
+            data = json.loads(last_line)
+        except json.JSONDecodeError:
+            return self._send_json(500, {'error': 'parse error', 'stdout': proc.stdout, 'stderr': proc.stderr})
+        # 200 si OK, 422 si checks rouges, 500 si autre erreur
+        if data.get('ok'):
+            return self._send_json(200, data)
+        if data.get('step') == 'checks':
+            return self._send_json(422, data)
+        return self._send_json(500, data)
 
-        return self._send_json(200, {
-            'ok': True,
-            'committed': had_staged,
-            'commit_message': message if had_staged else None,
-            'commit_output': commit_output,
-            'push_output': (push.stdout + push.stderr).strip(),
-        })
-
-    # ===== /api/backup (POST) =====
+    # ===== /api/backup (POST) — snapshot =====
     def handle_backup(self):
         length = int(self.headers.get('Content-Length', '0') or 0)
         raw = self.rfile.read(length).decode('utf-8') if length else '{}'
@@ -133,21 +154,22 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
         script = os.path.join(PROJECT_DIR, 'scripts', 'backup.py')
         if not os.path.exists(script):
-            return self._send_json(500, {'error': f'script not found: {script}'})
-
+            return self._send_json(500, {'error': 'scripts/backup.py not found'})
         cmd = [sys.executable, script, '--table', table, '--retention', str(retention), '--quiet']
-        proc = subprocess.run(cmd, capture_output=True, text=True, cwd=PROJECT_DIR, timeout=120)
+        try:
+            proc = run_subproc(cmd, timeout=120)
+        except subprocess.TimeoutExpired:
+            return self._send_json(504, {'error': 'backup timeout'})
         out = proc.stdout.strip()
-        err = proc.stderr.strip()
         if proc.returncode != 0:
-            return self._send_json(500, {'step': 'run', 'returncode': proc.returncode, 'stdout': out, 'stderr': err})
+            return self._send_json(500, {'step': 'run', 'returncode': proc.returncode, 'stdout': out, 'stderr': proc.stderr})
         try:
             result = json.loads(out)
         except json.JSONDecodeError:
-            return self._send_json(500, {'step': 'parse', 'stdout': out, 'stderr': err})
+            return self._send_json(500, {'step': 'parse', 'stdout': out, 'stderr': proc.stderr})
         return self._send_json(200, result)
 
-    # ===== /api/backups (GET) =====
+    # ===== /api/backups (GET) — liste snapshots =====
     def handle_backups_list(self):
         if not os.path.isdir(BACKUPS_DIR):
             return self._send_json(200, {'snapshots': [], 'index_exists': False})
@@ -159,7 +181,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     snapshots = json.load(f)
             except Exception as e:
                 return self._send_json(500, {'error': f'index unreadable: {e}'})
-        # Total stats
         total_size = 0
         for entry in snapshots:
             fpath = os.path.join(BACKUPS_DIR, entry.get('file', ''))
