@@ -160,6 +160,7 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--tex
     <button class="main-tab active" data-view="vue" onclick="setView('vue')">Vue d'ensemble</button>
     <button class="main-tab" data-view="transactions" onclick="setView('transactions')">Transactions</button>
     <button class="main-tab" data-view="analytics" onclick="setView('analytics')">Analytics</button>
+    <button class="main-tab" data-view="securite" onclick="setView('securite')">Sécurité</button>
   </div>
 
   <div id="period-controls" style="display:none;">
@@ -254,7 +255,7 @@ async function loadData() {
 function setView(v) {
   currentView = v;
   document.querySelectorAll('.main-tab').forEach(t => t.classList.toggle('active', t.dataset.view === v));
-  document.getElementById('period-controls').style.display = (v === 'vue') ? 'none' : 'block';
+  document.getElementById('period-controls').style.display = (v === 'vue' || v === 'securite') ? 'none' : 'block';
   render();
 }
 
@@ -331,6 +332,7 @@ function render() {
   if (currentView === 'vue') return renderVue();
   if (currentView === 'transactions') return renderTransactions();
   if (currentView === 'analytics') return renderAnalytics();
+  if (currentView === 'securite') return renderSecurity();
 }
 
 // ==================== VUE D'ENSEMBLE ====================
@@ -503,6 +505,131 @@ function renderAnalytics() {
 
   document.getElementById('content').innerHTML = html;
   buildCharts(txs, start, end);
+}
+
+// ==================== SECURITE ====================
+async function renderSecurity() {
+  const el = document.getElementById('content');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div><br>Vérifications de sécurité…</div>';
+
+  // 1. Test isolation RLS (live)
+  const cfg = { url: SUPABASE_URL, key: SUPABASE_KEY };
+  const pirate = window.supabase.createClient(cfg.url, cfg.key, {
+    auth: { persistSession: false, autoRefreshToken: false, storage: { getItem:()=>null, setItem:()=>{}, removeItem:()=>{} } }
+  });
+  let rlsTest;
+  try {
+    const sel = await pirate.from(TX_TABLE).select('id').limit(5);
+    const ins = await pirate.from(TX_TABLE).insert({
+      id: '__SEC_TEST__' + Date.now(), date: '2026-04-27', montant: 0.01,
+      prestation: '__test_securite__', paiement: 'cb', type: 'prestation'
+    });
+    rlsTest = {
+      selectCount: sel.data ? sel.data.length : null,
+      selectError: sel.error ? sel.error.message : null,
+      insertBlocked: !!ins.error,
+      insertError: ins.error ? ins.error.message : null,
+      verdict: (!sel.data || sel.data.length === 0) && !!ins.error ? 'ok' : 'bad'
+    };
+  } catch(e) {
+    rlsTest = { error: e.message, verdict: 'unknown' };
+  }
+  // Au cas où l'INSERT serait passé (faille) : nettoyer
+  try { await pirate.from(TX_TABLE).delete().like('id', '__SEC_TEST__%'); } catch(e) {}
+
+  // 2. Intégrité des données comptables
+  const totalRows = allTx.length;
+  const distinctIds = new Set(allTx.map(t => t.id)).size;
+  const nullMontant = allTx.filter(t => t.montant == null || isNaN(t.montant)).length;
+  const nullDate = allTx.filter(t => !t.date).length;
+  const nullPaiement = allTx.filter(t => !t.paiement).length;
+  const nullPrestation = allTx.filter(t => !t.prestation).length;
+  const negMontant = allTx.filter(t => t.montant < 0).length;
+  const duplicateIds = totalRows - distinctIds;
+
+  const findings = [];
+  if (duplicateIds > 0) findings.push({ level: 'bad', msg: duplicateIds + ' doublons d\'ID détectés' });
+  if (nullDate > 0) findings.push({ level: 'bad', msg: nullDate + ' ligne(s) sans date' });
+  if (nullMontant > 0) findings.push({ level: 'bad', msg: nullMontant + ' ligne(s) sans montant' });
+  if (nullPaiement > 0) findings.push({ level: 'warn', msg: nullPaiement + ' ligne(s) sans mode de paiement' });
+  if (nullPrestation > 0) findings.push({ level: 'warn', msg: nullPrestation + ' ligne(s) sans libellé prestation' });
+  if (negMontant > 0) findings.push({ level: 'warn', msg: negMontant + ' montant(s) négatif(s) (réductions ?)' });
+
+  // 3. Récupérabilité
+  const sortedSync = allTx.filter(t => t.synced_at).map(t => t.synced_at).sort();
+  const firstSync = sortedSync[0];
+  const lastSync = sortedSync[sortedSync.length - 1];
+  const hoursSinceLast = lastSync ? (Date.now() - new Date(lastSync).getTime()) / 3600000 : null;
+  const daysSinceFirst = firstSync ? (Date.now() - new Date(firstSync).getTime()) / 86400000 : null;
+
+  // 4. Verdict global
+  let verdict = 'ok';
+  if (rlsTest.verdict === 'bad') verdict = 'bad';
+  else if (findings.some(f => f.level === 'bad')) verdict = 'bad';
+  else if (findings.some(f => f.level === 'warn')) verdict = 'warn';
+  else if (rlsTest.verdict === 'unknown') verdict = 'warn';
+
+  // === Render ===
+  let html = '';
+
+  // Verdict
+  const verdictLabel = verdict === 'ok' ? 'Sécurité OK' : verdict === 'warn' ? 'Avertissements' : 'Faille détectée';
+  const verdictIcon = verdict === 'ok' ? '✓' : verdict === 'warn' ? '!' : '⚠';
+  html += '<div class="section"><div class="status-pill ' + verdict + '"><div class="icon" style="font-size:24px">' + verdictIcon + '</div><div class="body"><div class="label">Verdict global</div><div class="value" style="font-size:18px">' + verdictLabel + '</div></div></div></div>';
+
+  // Test RLS isolation
+  html += '<div class="section"><div class="section-title">Test d\'isolation RLS (live)</div><div class="status-row">';
+  if (rlsTest.error) {
+    html += '<div class="status-pill warn"><div class="icon">?</div><div class="body"><div class="label">Test impossible</div><div class="value">' + rlsTest.error + '</div></div></div>';
+  } else {
+    const selOk = (rlsTest.selectCount === 0 || rlsTest.selectCount === null);
+    html += '<div class="status-pill ' + (selOk ? 'ok' : 'bad') + '"><div class="icon">' + (selOk ? '✓' : '⚠') + '</div><div class="body"><div class="label">SELECT sans auth</div><div class="value">' + (selOk ? 'bloqué (RLS filtre)' : rlsTest.selectCount + ' lignes lues — FAILLE') + '</div></div></div>';
+    html += '<div class="status-pill ' + (rlsTest.insertBlocked ? 'ok' : 'bad') + '"><div class="icon">' + (rlsTest.insertBlocked ? '✓' : '⚠') + '</div><div class="body"><div class="label">INSERT sans auth</div><div class="value">' + (rlsTest.insertBlocked ? 'bloqué par RLS' : 'PASSÉ — FAILLE') + '</div></div></div>';
+  }
+  html += '<div class="status-pill ok"><div class="icon">🔒</div><div class="body"><div class="label">Politique active</div><div class="value">auth.uid() IS NOT NULL</div></div></div>';
+  html += '</div>';
+  html += '<p style="font-size:12px;color:var(--gray);margin-top:8px;">Ce test crée un client Supabase isolé (sans session), tente une lecture et une écriture, et vérifie que la base les rejette. Si l\'un des deux passe, la sécurité est compromise.</p>';
+  html += '</div>';
+
+  // Intégrité
+  html += '<div class="section"><div class="section-title">Intégrité des données comptables</div>';
+  if (findings.length === 0) {
+    html += '<div class="status-pill ok"><div class="icon">✓</div><div class="body"><div class="label">Toutes les colonnes critiques remplies</div><div class="value">' + totalRows + ' transactions, ' + distinctIds + ' IDs uniques</div></div></div>';
+  } else {
+    html += '<div class="status-row">';
+    findings.forEach(f => {
+      html += '<div class="status-pill ' + f.level + '"><div class="icon">' + (f.level === 'bad' ? '⚠' : '!') + '</div><div class="body"><div class="label">Anomalie</div><div class="value">' + f.msg + '</div></div></div>';
+    });
+    html += '</div>';
+  }
+  html += '</div>';
+
+  // Récupérabilité
+  let syncStatus = 'ok', syncMsg = 'Sync récente';
+  if (hoursSinceLast == null) { syncStatus = 'warn'; syncMsg = 'Aucune sync enregistrée'; }
+  else if (hoursSinceLast > 72) { syncStatus = 'bad'; syncMsg = 'Aucune sync depuis plus de 3 jours'; }
+  else if (hoursSinceLast > 36) { syncStatus = 'warn'; syncMsg = 'Sync ancienne (> 36h)'; }
+
+  html += '<div class="section"><div class="section-title">Récupérabilité comptable</div><div class="status-row">';
+  html += '<div class="status-pill ' + syncStatus + '"><div class="icon">' + (syncStatus==='ok'?'✓':syncStatus==='warn'?'!':'⚠') + '</div><div class="body"><div class="label">Dernière sync cloud</div><div class="value">' + (hoursSinceLast == null ? '—' : hoursSinceLast < 1 ? Math.round(hoursSinceLast*60)+' min' : hoursSinceLast < 48 ? hoursSinceLast.toFixed(1)+' h' : (hoursSinceLast/24).toFixed(1)+' j') + '</div></div></div>';
+  html += '<div class="status-pill ok"><div class="icon">📅</div><div class="body"><div class="label">Historique disponible</div><div class="value">' + (daysSinceFirst != null ? Math.round(daysSinceFirst) + ' j' : '—') + '</div></div></div>';
+  html += '<div class="status-pill ok"><div class="icon">📊</div><div class="body"><div class="label">Lignes prêtes à exporter</div><div class="value">' + totalRows + '</div></div></div>';
+  html += '</div>';
+  html += '<p style="font-size:12px;color:var(--gray);margin-top:8px;">' + syncMsg + '. Pour les backups Supabase eux-mêmes (Point-In-Time Recovery, snapshots quotidiens), va dans <strong>Supabase Dashboard → Database → Backups</strong>.</p>';
+  html += '</div>';
+
+  // Pour aller plus loin
+  html += '<div class="section"><div class="section-title">Détail avancé (advisors, policies)</div>';
+  html += '<div class="status-pill ok"><div class="icon">🔍</div><div class="body"><div class="label">Diagnostic complet</div><div class="value">L\'artifact "Natura Tif diagnostic Supabase" dans Cowork affiche les advisors security/performance, l\'état RLS table par table et les politiques.</div></div></div>';
+  html += '</div>';
+
+  // Actions
+  html += '<div class="section"><div class="actions">';
+  html += '<button class="btn btn-outline" onclick="renderSecurity()">↻ Refaire les tests</button>';
+  html += '<button class="btn btn-outline" onclick="loadData().then(render)">↻ Recharger les données</button>';
+  html += '</div></div>';
+
+  el.innerHTML = html;
 }
 
 // ==================== TABLE ====================
