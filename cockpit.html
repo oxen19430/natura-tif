@@ -281,6 +281,7 @@ function navigatePeriod(dir) {
 function fmt(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
 function money(n) { return n.toFixed(2).replace('.', ',') + ' €'; }
 function pctOf(v, total) { return total > 0 ? (v / total * 100).toFixed(0) + '%' : ''; }
+function isReduction(t) { return (t.montant < 0) || /r[eé]duction|remise|avoir/i.test(t.prestation || ''); }
 
 function getRange() {
   const d = new Date(currentDate);
@@ -434,12 +435,25 @@ function renderTransactions() {
   html += kpi('Produits', money(totalProduits), pctOf(totalProduits, totalCA));
   html += '</div></div>';
 
+  // Réductions sur la période
+  const reductions = txs.filter(t => isReduction(t));
+  const reductionsTotal = Math.abs(reductions.reduce((s, t) => s + t.montant, 0));
+  const caBrut = totalCA + reductionsTotal;
+
   html += '<div class="section"><div class="section-title">Détail par catégorie</div><div class="kpi-grid">';
   html += kpi('Femme', money(byCat.femme), pctOf(byCat.femme, totalCA));
   html += kpi('Homme', money(byCat.homme), pctOf(byCat.homme, totalCA));
   html += kpi('Enfant', money(byCat.enfant), pctOf(byCat.enfant, totalCA));
   html += kpi('Produits', money(totalProduits), pctOf(totalProduits, totalCA));
   html += '</div></div>';
+
+  if (reductions.length > 0) {
+    html += '<div class="section"><div class="section-title">Réductions appliquées</div><div class="kpi-grid kpi-grid-3">';
+    html += kpi('Nombre', reductions.length, '');
+    html += kpi('Total accordé', money(reductionsTotal), reductionsTotal > 0 ? pctOf(reductionsTotal, caBrut) + ' du CA brut' : '');
+    html += kpi('Moy. par réduction', money(reductionsTotal / reductions.length), '');
+    html += '</div></div>';
+  }
 
   html += '<div class="section"><div class="section-title">Modes de paiement</div><div class="kpi-grid kpi-grid-3">';
   html += kpi('Espèces', money(byPay.especes), pctOf(byPay.especes, totalCA));
@@ -487,6 +501,22 @@ function renderAnalytics() {
   html += kpi('Panier moyen', money(avg), compareSub(avg, prevAvg));
   html += kpi('Produits', money(prodTotal), '');
   html += '</div></div>';
+
+  // Réductions appliquées
+  const reductions = txs.filter(t => isReduction(t));
+  const reductionsTotal = Math.abs(reductions.reduce((s, t) => s + t.montant, 0));
+  const prevReductions = prevTxs.filter(t => isReduction(t));
+  const prevReductionsTotal = Math.abs(prevReductions.reduce((s, t) => s + t.montant, 0));
+  const caBrut = ca + reductionsTotal;
+
+  if (reductions.length > 0 || prevReductions.length > 0) {
+    html += '<div class="section"><div class="section-title">Réductions accordées (vs période précédente)</div><div class="kpi-grid">';
+    html += kpi('Nombre', reductions.length, compareSub(reductions.length, prevReductions.length));
+    html += kpi('Total accordé', money(reductionsTotal), compareSub(reductionsTotal, prevReductionsTotal));
+    html += kpi('% du CA brut', caBrut > 0 ? (reductionsTotal / caBrut * 100).toFixed(1) + '%' : '0%', '');
+    html += kpi('Moy. par réduction', reductions.length > 0 ? money(reductionsTotal / reductions.length) : '—', '');
+    html += '</div></div>';
+  }
 
   // Charts
   html += '<div class="section"><div class="section-title">Visualisation</div><div class="chart-row">';
@@ -557,7 +587,9 @@ async function renderSecurity() {
   if (nullMontant > 0) findings.push({ level: 'bad', msg: nullMontant + ' ligne(s) sans montant' });
   if (nullPaiement > 0) findings.push({ level: 'warn', msg: nullPaiement + ' ligne(s) sans mode de paiement' });
   if (nullPrestation > 0) findings.push({ level: 'warn', msg: nullPrestation + ' ligne(s) sans libellé prestation' });
-  if (negMontant > 0) findings.push({ level: 'warn', msg: negMontant + ' montant(s) négatif(s) (réductions ?)' });
+  const reductionsList = allTx.filter(t => isReduction(t));
+  const negSuspect = allTx.filter(t => t.montant < 0 && !isReduction(t)).length;
+  if (negSuspect > 0) findings.push({ level: 'warn', msg: negSuspect + ' montant(s) négatif(s) suspect(s) (hors réductions identifiées)' });
 
   // 3. Récupérabilité
   const sortedSync = allTx.filter(t => t.synced_at).map(t => t.synced_at).sort();
