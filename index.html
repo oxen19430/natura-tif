@@ -842,6 +842,36 @@ tr:nth-child(even) { background: var(--gray-light); }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
+/* ===== TEST MODE BANNER ===== */
+#test-banner {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  background: repeating-linear-gradient(45deg, #c0392b, #c0392b 14px, #a93226 14px, #a93226 28px);
+  color: white;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  padding: 6px 12px;
+  z-index: 9999;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  font-family: 'Inter', sans-serif;
+}
+#test-banner .test-banner-sub {
+  font-size: 10px;
+  font-weight: 500;
+  opacity: 0.9;
+  text-transform: none;
+  letter-spacing: 0;
+}
+#test-banner code { background: rgba(0,0,0,0.25); padding: 1px 5px; border-radius: 3px; font-size: 10px; }
+body.test-mode { padding-top: 30px; }
+
 /* ===== SVG Icons ===== */
 .ico { display: inline-block; width: 28px; height: 28px; vertical-align: middle; flex-shrink: 0; }
 .ico-lg { width: 36px; height: 36px; }
@@ -850,6 +880,12 @@ tr:nth-child(even) { background: var(--gray-light); }
 </style>
 </head>
 <body>
+
+<!-- ============ TEST MODE BANNER ============ -->
+<div id="test-banner" style="display:none;">
+  <span>⚠ MODE TEST</span>
+  <span class="test-banner-sub">Données isolées · table <code>transactions_test</code></span>
+</div>
 
 <!-- ============ SYNC FLOATING ICON ============ -->
 <div class="sync-floating sf-unconfigured" id="sync-float" onclick="toggleSyncTooltip()">
@@ -959,6 +995,10 @@ tr:nth-child(even) { background: var(--gray-light); }
       <span class="btn-label">ENFANT</span>
     </button>
   </div>
+  <button class="btn btn-outline btn-noSquare btn-full" style="min-height:70px; font-size:18px; margin-top:16px;" onclick="selectProduitSeul()">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+    <span class="btn-label">VENTE DE PRODUIT SEUL</span>
+  </button>
 </div>
 
 <!-- ============ ÉTAPE 2 : PRESTATION ============ -->
@@ -987,11 +1027,11 @@ tr:nth-child(even) { background: var(--gray-light); }
 
 <!-- ============ ÉTAPE 3 : PRODUITS (optionnel) ============ -->
 <div class="screen" id="screen-produits">
-  <button class="back-btn" onclick="showScreen('screen-presta')">Prestations</button>
+  <button class="back-btn" id="produits-back" onclick="backFromProduits()">Prestations</button>
   <div id="progress-3"></div>
   <div class="header">
-    <h1>Produits</h1>
-    <div class="subtitle">Ajouter des produits vendus (optionnel)</div>
+    <h1 id="produits-title">Produits</h1>
+    <div class="subtitle" id="produits-subtitle">Ajouter des produits vendus (optionnel)</div>
   </div>
   <div class="scroll-area" style="padding-bottom:180px;">
     <div class="btn-group" id="produits-list" style="grid-template-columns:1fr;"></div>
@@ -1002,7 +1042,7 @@ tr:nth-child(even) { background: var(--gray-light); }
       <div class="presta-recap-items" id="produits-recap-items"></div>
       <div class="presta-recap-total"><span>Produits</span><span id="produits-recap-total">0,00 €</span></div>
     </div>
-    <button class="skip-produits-btn" onclick="skipProduits()">PASSER — Aucun produit</button>
+    <button class="skip-produits-btn" id="produits-skip-btn" onclick="skipProduits()">PASSER — Aucun produit</button>
     <button class="presta-validate" id="produits-validate" onclick="validateProduits()">CONTINUER AVEC LES PRODUITS</button>
   </div>
 </div>
@@ -1028,32 +1068,6 @@ tr:nth-child(even) { background: var(--gray-light); }
       <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
       <span class="btn-label">CHÈQUE</span>
     </button>
-  </div>
-</div>
-
-<!-- ============ ÉTAPE 4b : RENDU MONNAIE (espèces) ============ -->
-<div class="screen" id="screen-monnaie">
-  <button class="back-btn" onclick="showScreen('screen-pay')">Paiement</button>
-  <div id="progress-4b"></div>
-  <div class="header">
-    <h1>Rendu monnaie</h1>
-    <div class="subtitle">Calculez le montant à rendre au client</div>
-  </div>
-  <div class="monnaie-display">
-    <div class="monnaie-total-label">Total à encaisser</div>
-    <div class="monnaie-total" id="monnaie-total"></div>
-  </div>
-  <div class="monnaie-quick-btns" id="monnaie-quick-btns"></div>
-  <div class="monnaie-input-wrap">
-    <label>Montant donné par le client</label>
-    <input type="number" step="0.01" min="0" id="monnaie-donne" placeholder="0,00" inputmode="decimal" oninput="calcMonnaie()">
-  </div>
-  <div class="monnaie-result" id="monnaie-result" style="display:none;">
-    <div class="monnaie-result-label" id="monnaie-result-label"></div>
-    <div class="monnaie-result-amount" id="monnaie-result-amount"></div>
-  </div>
-  <div class="btn-group" style="margin-top:auto;">
-    <button class="btn btn-green btn-noSquare btn-full" id="monnaie-confirm-btn" style="min-height:70px; font-size:20px;" onclick="confirmMonnaie()"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> CONTINUER</button>
   </div>
 </div>
 
@@ -1329,6 +1343,28 @@ tr:nth-child(even) { background: var(--gray-light); }
       VÉRIFIER LES MISES À JOUR
     </button>
   </div>
+
+  <!-- DEPLOY CARD : test mode only -->
+  <div class="card" id="deploy-card" style="margin-top:20px; display:none; border:2px solid #c0392b;">
+    <div style="font-size:14px; font-weight:700; color:#c0392b; margin-bottom:4px;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px;"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      Déploiement vers la tablette du salon
+    </div>
+    <div style="font-size:13px; color:var(--gray); margin-bottom:12px; line-height:1.5;">
+      Pousse les modifications du code vers GitHub. La tablette se mettra à jour automatiquement à sa prochaine ouverture.
+    </div>
+    <div id="deploy-status" style="font-size:13px; padding:10px; background:#f5f5f0; border-radius:8px; margin-bottom:12px; line-height:1.5;">Chargement…</div>
+    <div class="form-group">
+      <label class="form-label">Message de déploiement (optionnel)</label>
+      <input type="text" class="form-input" id="deploy-message" placeholder="Ex : ajout du contrôle matinal">
+    </div>
+    <div id="deploy-result" style="font-size:13px;margin:8px 0;"></div>
+    <button class="btn btn-noSquare" id="deploy-btn" style="background:#c0392b;color:#fff;" onclick="doDeploy()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:6px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      DÉPLOYER VERS LA TABLETTE
+    </button>
+    <button class="btn btn-outline btn-small" style="margin-top:8px;" onclick="loadDeployStatus()">Rafraîchir le statut</button>
+  </div>
 </div>
 
 <script>
@@ -1366,9 +1402,14 @@ const PAY_LABELS = { especes: "Espèces", cb: "Carte bancaire", cheque: "Chèque
 const CAT_LABELS = { homme: "Homme", femme: "Femme", enfant: "Enfant" };
 const CAT_ICONS = { homme: 'H', femme: 'F', enfant: 'E' };
 
+// ==================== TEST MODE ====================
+const IS_TEST = (location.hostname === 'localhost' || location.hostname === '127.0.0.1');
+const LS_PREFIX = IS_TEST ? 'test_' : '';
+const TX_TABLE = IS_TEST ? 'transactions_test' : 'transactions';
+
 // ==================== STORAGE ====================
-function getJSON(key, def) { try { return JSON.parse(localStorage.getItem(key)) || def; } catch { return def; } }
-function setJSON(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
+function getJSON(key, def) { try { return JSON.parse(localStorage.getItem(LS_PREFIX + key)) || def; } catch { return def; } }
+function setJSON(key, val) { localStorage.setItem(LS_PREFIX + key, JSON.stringify(val)); }
 function getTarifs() { return getJSON('nt_tarifs', JSON.parse(JSON.stringify(DEFAULT_TARIFS))); }
 function getProduits() { return getJSON('nt_produits', []); }
 function getTransactions() { return getJSON('nt_transactions', []); }
@@ -1413,7 +1454,6 @@ function showScreen(id) {
   if (id === 'screen-presta') renderProgress('progress-2', 2);
   if (id === 'screen-produits') renderProgress('progress-3', 3);
   if (id === 'screen-pay') renderProgress('progress-4', 4);
-  if (id === 'screen-monnaie') renderProgress('progress-4b', 4);
   if (id === 'screen-confirm') renderProgress('progress-5', 5);
   if (id === 'screen-produits-edit') renderProduitsEdit();
   if (id === 'screen-tarifs') renderTarifs();
@@ -1821,8 +1861,31 @@ function showProduitsScreen() {
       container.appendChild(btn);
     });
   }
+  // Adapt UI based on whether we're in product-only mode
+  const productOnly = encaissement.clients.length === 0;
+  document.getElementById('produits-back').textContent = productOnly ? 'Catégorie' : 'Prestations';
+  document.getElementById('produits-title').textContent = productOnly ? 'Vente de produit' : 'Produits';
+  document.getElementById('produits-subtitle').textContent = productOnly
+    ? 'Sélectionnez le ou les produits vendus'
+    : 'Ajouter des produits vendus (optionnel)';
+  document.getElementById('produits-skip-btn').style.display = productOnly ? 'none' : '';
   updateProduitsRecap();
   showScreen('screen-produits');
+}
+
+function selectProduitSeul() {
+  vibrate();
+  encaissement.clients = [];
+  encaissement.produits = [];
+  showProduitsScreen();
+}
+
+function backFromProduits() {
+  if (encaissement.clients.length === 0) {
+    showScreen('screen-cat');
+  } else {
+    showScreen('screen-presta');
+  }
 }
 
 function toggleProduit(btn, nom, prix) {
@@ -1880,81 +1943,14 @@ function getEncaissementTotal() {
 function selectPay(mode) {
   vibrate();
   encaissement.paiement = mode;
-  if (mode === 'especes') {
-    showMonnaieScreen();
-  } else {
-    showConfirmScreen();
-  }
-}
-
-function showMonnaieScreen() {
-  const total = getEncaissementTotal();
-  document.getElementById('monnaie-total').textContent = formatMoney(total);
-  document.getElementById('monnaie-donne').value = '';
-  document.getElementById('monnaie-result').style.display = 'none';
-  // Quick amount buttons
-  const quickBtns = document.getElementById('monnaie-quick-btns');
-  const amounts = [5, 10, 20, 50, 100];
-  quickBtns.innerHTML = amounts
-    .filter(a => a >= total)
-    .map(a => `<button class="monnaie-quick-btn" onclick="setMonnaieDonne(${a})">${a} €</button>`)
-    .join('');
-  // Also add exact amount button
-  quickBtns.innerHTML = `<button class="monnaie-quick-btn" onclick="setMonnaieDonne(${total})">Appoint (${formatMoney(total)})</button>` + quickBtns.innerHTML;
-  showScreen('screen-monnaie');
-  setTimeout(() => document.getElementById('monnaie-donne').focus(), 300);
-}
-
-function setMonnaieDonne(amount) {
-  vibrate();
-  document.getElementById('monnaie-donne').value = amount;
-  calcMonnaie();
-}
-
-function calcMonnaie() {
-  const total = getEncaissementTotal();
-  const donne = parseFloat(document.getElementById('monnaie-donne').value) || 0;
-  const resultDiv = document.getElementById('monnaie-result');
-  const labelEl = document.getElementById('monnaie-result-label');
-  const amountEl = document.getElementById('monnaie-result-amount');
-
-  if (donne <= 0) {
-    resultDiv.style.display = 'none';
-    return;
-  }
-
-  resultDiv.style.display = 'block';
-  const diff = donne - total;
-
-  if (Math.abs(diff) < 0.005) {
-    resultDiv.className = 'monnaie-result exact';
-    labelEl.textContent = 'Compte exact';
-    amountEl.textContent = '0,00 €';
-  } else if (diff > 0) {
-    resultDiv.className = 'monnaie-result rendu';
-    labelEl.textContent = 'À rendre';
-    amountEl.textContent = formatMoney(diff);
-  } else {
-    resultDiv.className = 'monnaie-result insuffisant';
-    labelEl.textContent = 'Montant insuffisant';
-    amountEl.textContent = '- ' + formatMoney(Math.abs(diff));
-  }
-}
-
-function confirmMonnaie() {
-  const total = getEncaissementTotal();
-  const donne = parseFloat(document.getElementById('monnaie-donne').value) || 0;
-  if (donne < total) {
-    vibrate();
-    return;
-  }
-  vibrate();
   showConfirmScreen();
 }
 
 function showConfirmScreen() {
   document.getElementById('conf-date').value = todayStr();
-  const cats = encaissement.clients.map(c => CAT_LABELS[c.categorie]).join(' + ');
+  const cats = encaissement.clients.length > 0
+    ? encaissement.clients.map(c => CAT_LABELS[c.categorie]).join(' + ')
+    : 'Vente de produit';
   document.getElementById('conf-cat').textContent = cats;
   document.getElementById('conf-pay').textContent = PAY_LABELS[encaissement.paiement];
   // Build prestations list (grouped per client when more than one)
@@ -2008,8 +2004,8 @@ function validerEncaissement() {
     });
   });
 
-  // Products attach to first client's category (arbitrary but consistent)
-  const firstCat = encaissement.clients[0]?.categorie || 'femme';
+  // Products attach to first client's category, or null when product-only sale
+  const firstCat = encaissement.clients[0]?.categorie || null;
   encaissement.produits.forEach(p => {
     txs.push({
       id: uuid(),
@@ -2027,8 +2023,12 @@ function validerEncaissement() {
 
   setJSON('nt_transactions', txs);
   syncPending();
-  const n = encaissement.clients.reduce((s, c) => s + c.prestations.length, 0);
-  showFlash(n > 1 ? `${n} prestations enregistrées` : 'Encaissement enregistré');
+  const nPresta = encaissement.clients.reduce((s, c) => s + c.prestations.length, 0);
+  const nProd = encaissement.produits.length;
+  const flash = nPresta === 0
+    ? (nProd > 1 ? `${nProd} produits enregistrés` : 'Produit enregistré')
+    : (nPresta > 1 ? `${nPresta} prestations enregistrées` : 'Encaissement enregistré');
+  showFlash(flash);
 }
 
 function showFlash(text) {
@@ -2693,6 +2693,70 @@ function loadSettings() {
   document.getElementById('set-sb-url').value = cfg.url || '';
   document.getElementById('set-sb-key').value = cfg.key || '';
   document.getElementById('sync-test-result').textContent = '';
+  // Test mode: show + refresh the deploy card
+  if (IS_TEST) {
+    const card = document.getElementById('deploy-card');
+    if (card) card.style.display = 'block';
+    loadDeployStatus();
+  }
+}
+
+async function loadDeployStatus() {
+  const el = document.getElementById('deploy-status');
+  if (!el) return;
+  el.textContent = 'Chargement…';
+  try {
+    const r = await fetch('/api/status', { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    if (!j.has_changes_to_deploy) {
+      el.innerHTML = '<span style="color:var(--green);font-weight:600;">✓ Tout est déjà déployé</span><br><span style="color:var(--gray);font-size:12px;">Dernier commit : ' + (j.last_commit || '—') + '</span>';
+    } else {
+      let html = '';
+      if (j.changed_count > 0) {
+        html += '<strong>' + j.changed_count + ' fichier' + (j.changed_count > 1 ? 's' : '') + ' modifié' + (j.changed_count > 1 ? 's' : '') + ' :</strong><br>';
+        html += '<span style="color:var(--gray);font-size:12px;">' + j.changed_files.slice(0, 6).join('<br>') + (j.changed_files.length > 6 ? '<br>…' : '') + '</span>';
+      }
+      if (j.commits_ahead > 0) {
+        if (html) html += '<br>';
+        html += '<strong>' + j.commits_ahead + ' commit' + (j.commits_ahead > 1 ? 's' : '') + ' en attente de push</strong>';
+      }
+      el.innerHTML = html;
+    }
+  } catch(e) {
+    el.innerHTML = '<span style="color:var(--red);">Erreur : ' + (e.message || 'serveur local injoignable') + '</span>';
+  }
+}
+
+async function doDeploy() {
+  const btn = document.getElementById('deploy-btn');
+  const result = document.getElementById('deploy-result');
+  const msg = document.getElementById('deploy-message').value.trim();
+  if (!confirm('Déployer vers la tablette du salon ?\n\nCela va commit + push sur GitHub. La tablette se mettra à jour à sa prochaine ouverture.')) return;
+  btn.disabled = true;
+  btn.style.opacity = '0.6';
+  result.innerHTML = '<span style="color:var(--gray);">Déploiement en cours…</span>';
+  try {
+    const r = await fetch('/api/deploy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: msg })
+    });
+    const j = await r.json();
+    if (!r.ok || !j.ok) {
+      result.innerHTML = '<span style="color:var(--red);">✗ Échec (' + (j.step || 'erreur') + ') : ' + (j.error || 'inconnu') + '</span>';
+    } else {
+      const what = j.committed ? ('Commit créé : ' + (j.commit_message || '')) : 'Aucun nouveau commit (déjà à jour localement)';
+      result.innerHTML = '<span style="color:var(--green);font-weight:600;">✓ Déployé !</span><br><span style="color:var(--gray);font-size:12px;">' + what + '</span>';
+      document.getElementById('deploy-message').value = '';
+      loadDeployStatus();
+    }
+  } catch(e) {
+    result.innerHTML = '<span style="color:var(--red);">Erreur réseau : ' + e.message + '</span>';
+  } finally {
+    btn.disabled = false;
+    btn.style.opacity = '1';
+  }
 }
 
 function saveSettings() {
@@ -2708,9 +2772,17 @@ function saveSettings() {
 
 // ==================== SYNC ====================
 let _sbClient = null;
+let _sbAuthPromise = null;
 
 function getSyncConfig() { return getJSON('nt_sync_config', { url: '', key: '' }); }
 function setSyncConfig(cfg) { setJSON('nt_sync_config', cfg); }
+
+// Attend que l'auth anonyme soit prête (idempotent — si déjà OK, retourne immédiatement)
+async function ensureSbAuth() {
+  if (_sbAuthPromise) {
+    try { await _sbAuthPromise; } catch(e) {}
+  }
+}
 
 function getSbClient() {
   const cfg = getSyncConfig();
@@ -2718,6 +2790,13 @@ function getSbClient() {
   if (_sbClient) return _sbClient;
   try {
     _sbClient = window.supabase.createClient(cfg.url, cfg.key);
+    // Auth anonyme — récupère la session existante (persistée en localStorage par
+    // le SDK Supabase) si dispo, sinon en crée une nouvelle. Sans auth la RLS
+    // bloque toute requête. Idempotent côté Supabase.
+    _sbAuthPromise = _sbClient.auth.getSession().then(({ data }) => {
+      if (data && data.session) return data.session;
+      return _sbClient.auth.signInAnonymously().then(r => r.data && r.data.session);
+    }).catch(e => { console.warn('Auth anonyme Supabase échouée :', e); return null; });
     return _sbClient;
   } catch(e) { return null; }
 }
@@ -2820,12 +2899,13 @@ async function manualSync() {
   if (floatEl) floatEl.className = 'sync-floating sf-syncing';
 
   try {
+    await ensureSbAuth();
     const rows = pending.map(t => ({
       id: t.id, session_id: t.session_id || null, date: t.date, heure: t.heure,
       categorie: t.categorie, prestation: t.prestation,
       montant: t.montant, paiement: t.paiement, type: t.type || 'prestation'
     }));
-    const { error } = await sb.from('transactions').upsert(rows, { onConflict: 'id' });
+    const { error } = await sb.from(TX_TABLE).upsert(rows, { onConflict: 'id' });
     if (error) throw error;
     txs.forEach(t => { t._synced = true; });
     setJSON('nt_transactions', txs);
@@ -2861,12 +2941,13 @@ async function syncPending() {
   if (label) label.textContent = 'Synchronisation…';
 
   try {
+    await ensureSbAuth();
     const rows = pending.map(t => ({
       id: t.id, session_id: t.session_id || null, date: t.date, heure: t.heure,
       categorie: t.categorie, prestation: t.prestation,
       montant: t.montant, paiement: t.paiement, type: t.type || 'prestation'
     }));
-    const { error } = await sb.from('transactions').upsert(rows, { onConflict: 'id' });
+    const { error } = await sb.from(TX_TABLE).upsert(rows, { onConflict: 'id' });
     if (!error) {
       txs.forEach(t => { t._synced = true; });
       setJSON('nt_transactions', txs);
@@ -2883,8 +2964,10 @@ async function testAndSaveSync() {
   res.style.color = 'var(--gray)'; res.textContent = 'Test en cours…';
   try {
     _sbClient = null;
+    _sbAuthPromise = null;
     const client = window.supabase.createClient(url, key);
-    const { error } = await client.from('transactions').select('id').limit(1);
+    try { await client.auth.signInAnonymously(); } catch(e) { console.warn('Auth anonyme test:', e); }
+    const { error } = await client.from(TX_TABLE).select('id').limit(1);
     if (error && error.code !== 'PGRST116') throw error;
     setSyncConfig({ url, key });
     _sbClient = client;
@@ -3001,7 +3084,15 @@ function migrateNames() {
 
 // ==================== INIT ====================
 function init() {
-  if (!localStorage.getItem('nt_tarifs')) setJSON('nt_tarifs', JSON.parse(JSON.stringify(DEFAULT_TARIFS)));
+  if (IS_TEST) {
+    document.body.classList.add('test-mode');
+    const banner = document.getElementById('test-banner');
+    if (banner) banner.style.display = 'flex';
+  } else {
+    const banner = document.getElementById('test-banner');
+    if (banner) banner.style.display = 'none';
+  }
+  if (!localStorage.getItem(LS_PREFIX + 'nt_tarifs')) setJSON('nt_tarifs', JSON.parse(JSON.stringify(DEFAULT_TARIFS)));
   migrateNames();
   // Auto-configure Supabase sync if not already set
   if (!getSyncConfig().url) {

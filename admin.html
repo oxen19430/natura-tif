@@ -91,6 +91,8 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--tex
 </style>
 </head>
 <body>
+<div id="test-banner" style="display:none;background:repeating-linear-gradient(45deg,#c0392b,#c0392b 14px,#a93226 14px,#a93226 28px);color:#fff;font:700 12px 'Inter',sans-serif;text-align:center;padding:6px;letter-spacing:0.5px;text-transform:uppercase;position:fixed;top:0;left:0;right:0;z-index:9999;">⚠ MODE TEST · table transactions_test</div>
+<script>if(location.hostname==='localhost'||location.hostname==='127.0.0.1'){document.getElementById('test-banner').style.display='block';document.body.style.paddingTop='28px';}</script>
 
 <!-- LOGIN -->
 <div class="login-screen" id="login-screen">
@@ -140,6 +142,9 @@ const MOIS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août'
 const CAT_LABELS = { femme: 'Femme', homme: 'Homme', enfant: 'Enfant' };
 const PAY_LABELS = { especes: 'Espèces', cb: 'CB', cheque: 'Chèque' };
 
+const IS_TEST = (location.hostname === 'localhost' || location.hostname === '127.0.0.1');
+const TX_TABLE = IS_TEST ? 'transactions_test' : 'transactions';
+
 let sb = null;
 let currentPeriod = 'jour';
 let currentDate = new Date();
@@ -179,13 +184,14 @@ if (sessionStorage.getItem('nt_admin')) {
 // ==================== DASHBOARD ====================
 async function initDashboard() {
   sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  try { await sb.auth.signInAnonymously(); } catch(e) { console.warn('Auth anonyme:', e); }
   await loadTransactions();
   render();
 }
 
 async function loadTransactions() {
   try {
-    const { data, error } = await sb.from('transactions').select('*').order('date', { ascending: false });
+    const { data, error } = await sb.from(TX_TABLE).select('*').order('date', { ascending: false });
     if (error) throw error;
     allTransactions = data || [];
   } catch(e) {

@@ -104,6 +104,8 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--tex
 </style>
 </head>
 <body>
+<div id="test-banner" style="display:none;background:repeating-linear-gradient(45deg,#c0392b,#c0392b 14px,#a93226 14px,#a93226 28px);color:#fff;font:700 12px 'Inter',sans-serif;text-align:center;padding:6px;letter-spacing:0.5px;text-transform:uppercase;position:fixed;top:0;left:0;right:0;z-index:9999;">⚠ MODE TEST · table transactions_test</div>
+<script>if(location.hostname==='localhost'||location.hostname==='127.0.0.1'){document.getElementById('test-banner').style.display='block';document.body.style.paddingTop='28px';}</script>
 
 <!-- LOGIN -->
 <div class="login-screen" id="login-screen">
@@ -148,6 +150,8 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--tex
 <script>
 const SB_URL = 'https://rgwsqufbdimryxqefvhx.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJnd3NxdWZiZGltcnl4cWVmdmh4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5NTI4OTQsImV4cCI6MjA5MDUyODg5NH0.VNIY3iq3WZz-SVveQdMMqNth2ZmBP7aoJJ3PhfsmN-0';
+const IS_TEST = (location.hostname === 'localhost' || location.hostname === '127.0.0.1');
+const TX_TABLE = IS_TEST ? 'transactions_test' : 'transactions';
 const PIN = '1234';
 const JOURS = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
 const MOIS_NAMES = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
@@ -185,13 +189,14 @@ if (sessionStorage.getItem('nt_analytics')) {
 // ==================== INIT ====================
 async function init() {
   sb = window.supabase.createClient(SB_URL, SB_KEY);
+  try { await sb.auth.signInAnonymously(); } catch(e) { console.warn('Auth anonyme:', e); }
   await loadData();
   render();
 }
 
 async function loadData() {
   try {
-    const { data, error } = await sb.from('transactions').select('*').order('date', { ascending: true });
+    const { data, error } = await sb.from(TX_TABLE).select('*').order('date', { ascending: true });
     if (error) throw error;
     allTx = (data || []).map(t => ({ ...t, montant: parseFloat(t.montant) || 0 }));
     document.getElementById('last-sync').textContent = 'Dernière actualisation : ' + new Date().toLocaleString('fr-FR');
