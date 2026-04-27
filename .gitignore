@@ -1,0 +1,18 @@
+# Backups locaux (générés par scripts/backup.py)
+backups/
+!backups/.gitkeep
+
+# Logs et fichiers de travail temporaires
+deploy.log
+_deploy.bat
+_test.bat
+_restart_server.bat
+.write_test_*
+sw.js.bak
+sw_v*.js
+
+# macOS metadata (héritage du disque partagé)
+.Spotlight-V100/
+.Trashes/
+.fseventsd/
+.DS_Store

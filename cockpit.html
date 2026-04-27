@@ -161,6 +161,7 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--tex
     <button class="main-tab" data-view="transactions" onclick="setView('transactions')">Transactions</button>
     <button class="main-tab" data-view="analytics" onclick="setView('analytics')">Analytics</button>
     <button class="main-tab" data-view="securite" onclick="setView('securite')">Sécurité</button>
+    <button class="main-tab" data-view="backup" onclick="setView('backup')">Backup</button>
   </div>
 
   <div id="period-controls" style="display:none;">
@@ -255,7 +256,7 @@ async function loadData() {
 function setView(v) {
   currentView = v;
   document.querySelectorAll('.main-tab').forEach(t => t.classList.toggle('active', t.dataset.view === v));
-  document.getElementById('period-controls').style.display = (v === 'vue' || v === 'securite') ? 'none' : 'block';
+  document.getElementById('period-controls').style.display = (v === 'vue' || v === 'securite' || v === 'backup') ? 'none' : 'block';
   render();
 }
 
@@ -333,6 +334,7 @@ function render() {
   if (currentView === 'transactions') return renderTransactions();
   if (currentView === 'analytics') return renderAnalytics();
   if (currentView === 'securite') return renderSecurity();
+  if (currentView === 'backup') return renderBackup();
 }
 
 // ==================== VUE D'ENSEMBLE ====================
@@ -630,6 +632,120 @@ async function renderSecurity() {
   html += '</div></div>';
 
   el.innerHTML = html;
+}
+
+// ==================== BACKUP ====================
+function fmtBytes(b) {
+  if (b == null) return '—';
+  if (b < 1024) return b + ' B';
+  if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' kB';
+  return (b / (1024 * 1024)).toFixed(2) + ' MB';
+}
+
+async function renderBackup() {
+  const el = document.getElementById('content');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div><br>Chargement de l\'état des backups…</div>';
+
+  let html = '';
+
+  if (!IS_TEST) {
+    html += '<div class="section"><div class="status-pill warn"><div class="icon">!</div><div class="body"><div class="label">Mode prod (GitHub Pages)</div><div class="value">Les backups locaux nécessitent le serveur Python.</div></div></div></div>';
+    html += '<div class="section"><div class="section-title">Comment lancer un backup</div>';
+    html += '<ol style="line-height:1.8;font-size:14px;color:var(--text);padding-left:20px;">';
+    html += '<li>Sur ton PC, ouvre le dossier <span style="font-family:monospace;background:var(--primary-light);padding:2px 6px;border-radius:4px;">Mes applications (DEV)\\Natura Tif</span></li>';
+    html += '<li>Double-clique sur <span style="font-family:monospace;background:var(--primary-light);padding:2px 6px;border-radius:4px;">start_server.bat</span></li>';
+    html += '<li>Ouvre <span style="font-family:monospace;background:var(--primary-light);padding:2px 6px;border-radius:4px;">http://localhost:8766/cockpit.html</span> et reviens sur cet onglet</li>';
+    html += '<li>OU lance directement <span style="font-family:monospace;background:var(--primary-light);padding:2px 6px;border-radius:4px;">python scripts/backup.py</span> dans une console (ne nécessite pas le serveur)</li>';
+    html += '</ol></div>';
+    html += '<div class="section"><div class="section-title">Backups Supabase natifs</div>';
+    html += '<div class="status-pill ok"><div class="icon">☁️</div><div class="body"><div class="label">Supabase fait ses propres backups</div><div class="value">Plan gratuit : Daily Backup, rétention 7 jours. À consulter dans <strong>Supabase Dashboard → Database → Backups</strong>.</div></div></div>';
+    el.innerHTML = html;
+    return;
+  }
+
+  let listData = null, listError = null;
+  try {
+    const r = await fetch('/api/backups');
+    if (r.ok) listData = await r.json();
+    else listError = 'serveur a renvoyé ' + r.status;
+  } catch(e) { listError = e.message; }
+
+  const snapshots = listData && listData.snapshots ? listData.snapshots : [];
+  const totalSize = listData && listData.total_size_bytes != null ? listData.total_size_bytes : null;
+  const lastSnap = snapshots.length ? snapshots[snapshots.length - 1] : null;
+
+  let verdict = 'ok', verdictMsg = 'Backups locaux en place';
+  if (snapshots.length === 0) { verdict = 'warn'; verdictMsg = 'Aucun backup local pour l\'instant'; }
+  else if (lastSnap) {
+    const lastDate = new Date(lastSnap.created_at);
+    const hoursSince = (Date.now() - lastDate.getTime()) / 3600000;
+    if (hoursSince > 48) { verdict = 'warn'; verdictMsg = 'Dernier backup il y a plus de 2 jours'; }
+  }
+
+  html += '<div class="section"><div class="status-pill ' + verdict + '"><div class="icon">' + (verdict==='ok'?'✓':'!') + '</div><div class="body"><div class="label">Verdict</div><div class="value">' + verdictMsg + '</div></div></div></div>';
+
+  html += '<div class="section"><div class="section-title">État des backups locaux</div><div class="kpi-grid">';
+  html += kpi('Snapshots gardés', snapshots.length, 'rétention 90 j');
+  html += kpi('Espace utilisé', fmtBytes(totalSize), '');
+  html += kpi('Dernier snapshot', lastSnap ? new Date(lastSnap.created_at).toLocaleDateString('fr-FR') : '—', lastSnap ? lastSnap.row_count + ' lignes' : '');
+  html += kpi('Table sauvegardée', lastSnap ? lastSnap.table : (TX_TABLE), '');
+  html += '</div></div>';
+
+  html += '<div class="section"><div class="section-title">Lancer un snapshot</div>';
+  html += '<div id="backup-result" style="margin-bottom:10px;"></div>';
+  html += '<div class="actions">';
+  html += '<button class="btn btn-primary" id="btn-snap" onclick="triggerBackup(\'' + TX_TABLE + '\')">📸 Snapshot ' + TX_TABLE + ' maintenant</button>';
+  if (TX_TABLE === 'transactions_test') {
+    html += '<button class="btn btn-outline" onclick="triggerBackup(\'transactions\')">📸 Snapshot prod (transactions)</button>';
+  }
+  html += '<button class="btn btn-outline" onclick="renderBackup()">↻ Actualiser la liste</button>';
+  html += '</div></div>';
+
+  html += '<div class="section"><div class="section-title">Snapshots disponibles (' + snapshots.length + ')</div>';
+  if (snapshots.length === 0) {
+    html += '<div class="no-data">Aucun snapshot pour l\'instant. Clique sur "Snapshot maintenant" ci-dessus.</div>';
+  } else {
+    html += '<div class="table-card"><table><thead><tr><th>Date</th><th>Table</th><th>Lignes</th><th>Taille</th><th></th></tr></thead><tbody>';
+    [...snapshots].reverse().forEach(s => {
+      const d = new Date(s.created_at);
+      const dateStr = d.toLocaleDateString('fr-FR') + ' ' + d.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
+      html += '<tr><td>' + dateStr + '</td><td>' + s.table + '</td><td>' + s.row_count + '</td><td>' + fmtBytes(s.size_bytes) + '</td><td><a href="/backups/' + encodeURIComponent(s.file) + '" download style="color:var(--primary);text-decoration:underline;font-size:12px;">⇓ télécharger</a></td></tr>';
+    });
+    html += '</tbody></table></div>';
+  }
+  html += '</div>';
+
+  html += '<div class="section"><div class="section-title">Automatiser (optionnel)</div>';
+  html += '<div class="status-pill ok"><div class="icon">⏰</div><div class="body"><div class="label">Tâche planifiée Windows</div><div class="value">Pour un snapshot quotidien automatique sans rien lancer manuellement, crée une tâche planifiée qui exécute :<br><span style="font-family:monospace;font-size:12px;background:var(--primary-light);padding:4px 8px;border-radius:4px;display:inline-block;margin-top:6px;">python "C:\\Users\\elect\\Documents\\Mes applications (DEV)\\Natura Tif\\scripts\\backup.py" --quiet</span></div></div>';
+  html += '</div>';
+
+  html += '<div class="section"><div class="section-title">Backups Supabase natifs (en plus)</div>';
+  html += '<div class="status-pill ok"><div class="icon">☁️</div><div class="body"><div class="label">Supabase Daily Backup</div><div class="value">Le plan gratuit Supabase fait son propre backup quotidien (rétention 7 j). À consulter dans <strong>Supabase Dashboard → Database → Backups</strong>. Le backup local ici est un filet de sécurité supplémentaire que tu contrôles.</div></div>';
+  html += '</div>';
+
+  el.innerHTML = html;
+}
+
+async function triggerBackup(table) {
+  const btn = document.getElementById('btn-snap');
+  const out = document.getElementById('backup-result');
+  if (btn) { btn.disabled = true; btn.textContent = 'Snapshot en cours…'; }
+  out.innerHTML = '<div class="status-pill ok"><div class="icon">⏳</div><div class="body"><div class="label">En cours</div><div class="value">Connexion à Supabase et écriture du fichier…</div></div></div>';
+
+  try {
+    const r = await fetch('/api/backup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ table: table, retention: 90 })
+    });
+    const data = await r.json();
+    if (!r.ok || !data.ok) throw new Error(data.error || data.stderr || 'erreur inconnue');
+    out.innerHTML = '<div class="status-pill ok"><div class="icon">✓</div><div class="body"><div class="label">Snapshot créé</div><div class="value">' + data.snapshot + ' · ' + data.rows + ' lignes · ' + fmtBytes(data.size_bytes) + (data.deleted_old && data.deleted_old.length ? ' · ' + data.deleted_old.length + ' anciens supprimés' : '') + '</div></div></div>';
+    setTimeout(() => renderBackup(), 1500);
+  } catch(e) {
+    out.innerHTML = '<div class="status-pill bad"><div class="icon">⚠</div><div class="body"><div class="label">Échec</div><div class="value">' + e.message + '</div></div></div>';
+    if (btn) { btn.disabled = false; btn.textContent = '📸 Snapshot ' + table + ' maintenant'; }
+  }
 }
 
 // ==================== TABLE ====================
