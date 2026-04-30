@@ -18,3 +18,11 @@ Fichiers déployés :
 - `.gitignore`
 - `cockpit.html`
 - `sw.js`
+
+## 2026-04-30 11:30 CEST — sw.js v14
+
+**fix bandeau MODE TEST + whitelist prod**
+
+Fichiers déployés :
+- `cockpit.html`
+- `index.html`

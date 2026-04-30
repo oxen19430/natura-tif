@@ -132,7 +132,7 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--tex
 </head>
 <body>
 <div id="test-banner" style="display:none;background:repeating-linear-gradient(45deg,#c0392b,#c0392b 14px,#a93226 14px,#a93226 28px);color:#fff;font:700 12px 'Inter',sans-serif;text-align:center;padding:6px;letter-spacing:0.5px;text-transform:uppercase;position:fixed;top:0;left:0;right:0;z-index:9999;">⚠ MODE TEST · table transactions_test</div>
-<script>if(location.hostname==='localhost'||location.hostname==='127.0.0.1'){document.getElementById('test-banner').style.display='block';document.body.style.paddingTop='28px';}</script>
+<script>if(location.hostname!=='oxen19430.github.io'){document.getElementById('test-banner').style.display='block';document.body.style.paddingTop='28px';}</script>
 
 <!-- LOGIN -->
 <div class="login-screen" id="login-screen">
@@ -197,7 +197,7 @@ const CAT_LABELS = { femme: 'Femme', homme: 'Homme', enfant: 'Enfant' };
 const PAY_LABELS = { especes: 'Espèces', cb: 'CB', cheque: 'Chèque' };
 const COLORS = { femme: '#8B6914', homme: '#5B5723', enfant: '#A8956A', produit: '#D97706', especes: '#7A9B2E', cb: '#4A7AB5', cheque: '#7C6BAF' };
 
-const IS_TEST = (location.hostname === 'localhost' || location.hostname === '127.0.0.1');
+const IS_TEST = (location.hostname !== 'oxen19430.github.io');
 const TX_TABLE = IS_TEST ? 'transactions_test' : 'transactions';
 
 let sb = null;
