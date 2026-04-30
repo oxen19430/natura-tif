@@ -26,3 +26,12 @@ Fichiers déployés :
 Fichiers déployés :
 - `cockpit.html`
 - `index.html`
+
+## 2026-04-30 14:52 CEST — sw.js v15
+
+**deploy.py: rollback + timeout 300s + admin/analytics dans DEPLOY_FILES + auto-refresh admin**
+
+Fichiers déployés :
+- `admin.html`
+- `analytics.html`
+- `scripts/deploy.py`

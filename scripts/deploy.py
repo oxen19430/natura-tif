@@ -45,9 +45,9 @@ GIT_USER_EMAIL = 'electrosoundstyleproject@gmail.com'
 GIT_USER_NAME = 'Vincent GIBERT'
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DEPLOY_FILES = ['index.html', 'cockpit.html', 'sw.js', 'manifest.json', 'icon-192.png', 'icon-512.png', 'serve.py', '.gitignore']
+DEPLOY_FILES = ['index.html', 'cockpit.html', 'admin.html', 'analytics.html', 'sw.js', 'manifest.json', 'icon-192.png', 'icon-512.png', 'serve.py', '.gitignore']
 DEPLOY_DIRS = ['scripts']  # tout le contenu sera copié
-ASSET_FILES = ['index.html', 'cockpit.html', 'manifest.json', 'icon-192.png', 'icon-512.png']  # déclencheurs de bump sw.js
+ASSET_FILES = ['index.html', 'cockpit.html', 'admin.html', 'analytics.html', 'manifest.json', 'icon-192.png', 'icon-512.png']  # déclencheurs de bump sw.js
 
 CTX = ssl.create_default_context()
 
@@ -266,8 +266,9 @@ def run_git_deploy(message, args):
             return {'ok': True, 'dry_run': True, 'commit_hash': commit_hash, 'status': status}
 
         log('  → git push...', args)
+        # Timeout 300s pour laisser le temps de générer/coller un PAT si nécessaire.
         proc = subprocess.run(['git', 'push', 'origin', 'HEAD'],
-                              cwd=tmp, capture_output=True, text=True, timeout=60)
+                              cwd=tmp, capture_output=True, text=True, timeout=300)
         if proc.returncode != 0:
             return {'ok': False, 'step': 'push', 'error': proc.stderr.strip()}
 
@@ -306,6 +307,13 @@ def main():
         return 2
     log(f'   ✓ {len(checks)} checks ok', args)
 
+    # Sauvegarde du contenu d'origine de sw.js et CHANGELOG.md AVANT toute modification locale.
+    # Utilisé pour rollback si le push échoue, afin de garder local et prod cohérents.
+    sw_path = PROJECT_ROOT / 'sw.js'
+    chlog_path = PROJECT_ROOT / 'CHANGELOG.md'
+    sw_original = sw_path.read_text(encoding='utf-8') if sw_path.exists() else None
+    chlog_original = chlog_path.read_text(encoding='utf-8') if chlog_path.exists() else None
+
     asset_changed = any(c.get('asset_changed') for c in checks)
     if asset_changed and not args.no_bump:
         log('\n2. Bump sw.js (assets ont changé)...', args)
@@ -321,6 +329,16 @@ def main():
     log('\n4. Git deploy...', args)
     result = run_git_deploy(args.message, args)
 
+    # Rollback si le push a échoué : on remet sw.js et CHANGELOG.md à leur état d'origine,
+    # sinon le local et la prod divergent (CHANGELOG dit v12 mais prod sert v11).
+    if not result.get('ok') and result.get('step') == 'push' and not args.dry_run:
+        log('\n⚠ Push échoué — rollback de sw.js et CHANGELOG.md...', args)
+        if sw_original is not None:
+            sw_path.write_text(sw_original, encoding='utf-8', newline='\n')
+        if chlog_original is not None:
+            chlog_path.write_text(chlog_original, encoding='utf-8', newline='\n')
+        log('   ✓ Fichiers locaux rétablis. Relance le déploiement après avoir réglé l\'auth.', args)
+
     out = {
         'ok': result.get('ok', False),
         'sw_version': sw_v,
@@ -330,6 +348,10 @@ def main():
         'checks_failed': len(failed),
         **result,
     }
+
+    # Log persistant dans deploy.log (succès ET échec).
+    write_deploy_log(args, out)
+
     if args.quiet:
         print(json.dumps(out))
     elif out['ok']:
@@ -337,6 +359,29 @@ def main():
     else:
         log(f'\n❌ Échec : {out.get("step", "?")} : {out.get("error", "?")}', args)
     return 0 if out['ok'] else 1
+
+
+def write_deploy_log(args, out):
+    """Append au deploy.log à chaque exécution (succès ou échec) pour avoir une trace persistante."""
+    log_file = PROJECT_ROOT / 'deploy.log'
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    status = 'OK' if out.get('ok') else 'ÉCHEC'
+    lines = [f'\n==== {now} — {status} ====']
+    lines.append(f'Message : {args.message}')
+    lines.append(f'sw.js   : v{out.get("sw_version", "?")}')
+    if out.get('ok'):
+        lines.append(f'Commit  : {out.get("commit_hash", "?")}')
+        if out.get('changed_files'):
+            lines.append(f'Fichiers: {", ".join(out["changed_files"])}')
+    else:
+        lines.append(f'Étape   : {out.get("step", "?")}')
+        err = (out.get("error") or "?")[:500]
+        lines.append(f'Erreur  : {err}')
+    try:
+        with open(log_file, 'a', encoding='utf-8') as f:
+            f.write('\n'.join(lines) + '\n')
+    except Exception:
+        pass  # Si on n'arrive pas à logger, on ne casse pas le déploiement
 
 
 if __name__ == '__main__':
