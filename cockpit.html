@@ -235,6 +235,9 @@ if (sessionStorage.getItem('nt_cockpit')) {
 }
 
 // ==================== INIT ====================
+// Timestamp du dernier pull réussi — utilisé par autoRefresh() pour l'anti-rebond.
+let _lastRefresh = 0;
+
 async function init() {
   sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   try { await sb.auth.signInAnonymously(); } catch(e) { console.warn('Auth anonyme:', e); }
@@ -248,10 +251,26 @@ async function loadData() {
     if (error) throw error;
     allTx = (data || []).map(t => ({ ...t, montant: parseFloat(t.montant) || 0 }));
     document.getElementById('last-sync').textContent = 'Données à jour · ' + new Date().toLocaleString('fr-FR');
+    _lastRefresh = Date.now();
   } catch(e) {
     document.getElementById('content').innerHTML = '<div class="no-data">Erreur de connexion à Supabase.<br><small>' + e.message + '</small></div>';
   }
 }
+
+// ==================== AUTO-REFRESH ====================
+// Re-pull silencieux quand l'onglet redevient visible ou que le réseau revient.
+// Anti-rebond 10 s pour éviter de spammer Supabase.
+async function autoRefresh() {
+  if (!sb || !sessionStorage.getItem('nt_cockpit')) return;
+  if (!navigator.onLine) return;
+  if (Date.now() - _lastRefresh < 10000) return;
+  await loadData();
+  render();
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') autoRefresh();
+});
+window.addEventListener('online', autoRefresh);
 
 // ==================== VIEW SWITCHING ====================
 function setView(v) {

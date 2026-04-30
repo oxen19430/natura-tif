@@ -1,18 +1,25 @@
-# Backups locaux (générés par scripts/backup.py)
-backups/
-!backups/.gitkeep
-
-# Logs et fichiers de travail temporaires
+# Logs
+*.log
 deploy.log
-_deploy.bat
-_test.bat
-_restart_server.bat
-.write_test_*
-sw.js.bak
-sw_v*.js
+deploy_test.log
 
-# macOS metadata (héritage du disque partagé)
-.Spotlight-V100/
-.Trashes/
-.fseventsd/
+# Sauvegardes / résidus
+sw.js.bak
+sw_v6.js
+*.bak
+
+# Reliques Windows (à supprimer un jour)
+_legacy_windows/
+*.bat
+*.ps1
+
+# Fichiers Mac
 .DS_Store
+
+# Profils navigateur isolés (créés par le lanceur)
+.chrome-data/
+.serve.log
+.serve.pid
+
+# Backups Supabase (gros, regénérables)
+backups/snapshot-*.json
