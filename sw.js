@@ -1,4 +1,4 @@
-const CACHE_NAME = 'natura-tif-v15';
+const CACHE_NAME = 'natura-tif-v16';
 const URLS_TO_CACHE = [
   './',
   './index.html',
@@ -12,13 +12,21 @@ const URLS_TO_CACHE = [
 ];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(URLS_TO_CACHE)));
-  self.skipWaiting();
+  // Pas de skipWaiting() ici : on veut que la nouvelle version reste en attente
+  // jusqu'à ce que Gaëlle clique explicitement "Mise à jour de l'application".
+  // Le bouton dans Paramètres envoie alors un postMessage SKIP_WAITING (cf. listener ci-dessous).
 });
 self.addEventListener('activate', event => {
   event.waitUntil(caches.keys().then(keys =>
     Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
   ));
   self.clients.claim();
+});
+// Active le SW en attente quand l'app envoie SKIP_WAITING (déclenché par Gaëlle).
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);

@@ -35,3 +35,15 @@ Fichiers déployés :
 - `admin.html`
 - `analytics.html`
 - `scripts/deploy.py`
+
+## 2026-05-02 10:34 CEST — sw.js v16
+
+**test diagnostic**
+
+Fichiers déployés :
+- `index.html`
+- `release.json`
+- `scripts/deploy.py`
+- `scripts/smoke_test.py`
+- `serve.py`
+- `sw.js`

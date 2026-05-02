@@ -663,6 +663,8 @@ tr:nth-child(even) { background: var(--gray-light); }
   font-family: 'Inter', sans-serif;
 }
 .settings-badge.visible { display: flex; }
+/* En mode test, badge orange si modifs locales pas encore poussées en prod (rappel pour Vincent). */
+.settings-badge.pending-deploy { background: var(--orange, #D97706); }
 
 /* ===== Tarif edit row ===== */
 .tarif-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
@@ -871,6 +873,56 @@ tr:nth-child(even) { background: var(--gray-light); }
 }
 #test-banner code { background: rgba(0,0,0,0.25); padding: 1px 5px; border-radius: 3px; font-size: 10px; }
 body.test-mode { padding-top: 30px; }
+
+/* ===== UPDATE OVERLAY (mise à jour contrôlée par Gaëlle) ===== */
+#update-overlay {
+  position: fixed; inset: 0;
+  background: rgba(91, 87, 35, 0.92);
+  display: none;
+  align-items: center; justify-content: center;
+  z-index: 100000;
+  font-family: 'Inter', sans-serif;
+}
+#update-overlay.visible { display: flex; }
+#update-overlay .update-overlay-card {
+  background: white;
+  border-radius: 18px;
+  padding: 28px 32px;
+  max-width: 360px; width: 90%;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+  text-align: center;
+}
+#update-overlay .update-overlay-title {
+  font-size: 18px; font-weight: 700; color: var(--primary);
+  margin-bottom: 6px;
+}
+#update-overlay .update-overlay-release {
+  font-size: 14px; color: var(--primary);
+  font-style: italic;
+  margin-bottom: 10px;
+  min-height: 18px;
+}
+#update-overlay .update-overlay-release:empty { display: none; }
+#update-overlay .update-overlay-step {
+  font-size: 14px; color: var(--gray);
+  margin-bottom: 16px; min-height: 40px;
+  display: flex; align-items: center; justify-content: center;
+}
+#update-overlay .update-overlay-bar {
+  height: 8px; background: #f0f0e8;
+  border-radius: 4px; overflow: hidden;
+  margin-bottom: 16px;
+}
+#update-overlay .update-overlay-bar-fill {
+  height: 100%; background: var(--primary);
+  width: 0%; transition: width 0.4s ease;
+  border-radius: 4px;
+}
+#update-overlay.error .update-overlay-bar-fill { background: var(--red); }
+#update-overlay .update-overlay-hint {
+  font-size: 12px; color: var(--gray);
+  font-style: italic;
+}
 
 /* ===== SVG Icons ===== */
 .ico { display: inline-block; width: 28px; height: 28px; vertical-align: middle; flex-shrink: 0; }
@@ -2902,17 +2954,25 @@ async function manualSync() {
 
   try {
     await ensureSbAuth();
-    const rows = pending.map(t => ({
-      id: t.id, session_id: t.session_id || null, date: t.date, heure: t.heure,
-      categorie: t.categorie, prestation: t.prestation,
-      montant: t.montant, paiement: t.paiement, type: t.type || 'prestation'
-    }));
-    const { error } = await sb.from(TX_TABLE).upsert(rows, { onConflict: 'id' });
-    if (error) throw error;
-    txs.forEach(t => { t._synced = true; });
-    setJSON('nt_transactions', txs);
-    if (resultEl) { resultEl.className = 'sync-result sync-result-ok'; resultEl.textContent = `✓ ${pending.length} encaissement${pending.length > 1 ? 's' : ''} envoyé${pending.length > 1 ? 's' : ''} avec succès !`; }
+    const rows = pending.map(_txToRow);
+    const res = await _upsertBatch(sb, rows);
+    if (!res.ok) {
+      // Si le batch échoue : déléguer à syncPending qui isolera la transaction pourrie.
+      console.warn('[sync manuel] batch rejeté, fallback isolation:', res.error);
+      await syncPending();
+      const stillPending = getTransactions().filter(t => !t._synced).length;
+      if (stillPending === 0) {
+        if (resultEl) { resultEl.className = 'sync-result sync-result-ok'; resultEl.textContent = `✓ ${pending.length} encaissement${pending.length > 1 ? 's' : ''} envoyé${pending.length > 1 ? 's' : ''} avec succès !`; }
+      } else {
+        if (resultEl) { resultEl.className = 'sync-result sync-result-err'; resultEl.textContent = `${pending.length - stillPending}/${pending.length} envoyé(s). ${stillPending} en erreur — voir la console.`; }
+      }
+    } else {
+      // Re-lit le localStorage actuel avant de marquer (évite race condition).
+      _markSynced(pending.map(t => t.id));
+      if (resultEl) { resultEl.className = 'sync-result sync-result-ok'; resultEl.textContent = `✓ ${pending.length} encaissement${pending.length > 1 ? 's' : ''} envoyé${pending.length > 1 ? 's' : ''} avec succès !`; }
+    }
   } catch(e) {
+    console.warn('[sync manuel] erreur:', e);
     if (resultEl) { resultEl.className = 'sync-result sync-result-err'; resultEl.textContent = 'Erreur : ' + (e.message || 'Synchronisation échouée.'); }
   }
   updateSyncBadge();
@@ -2930,12 +2990,57 @@ document.addEventListener('click', function(e) {
   }
 });
 
+// ==================== SYNC HARDENED (2 mai 2026) ====================
+// Helper : prépare le payload depuis une transaction locale.
+function _txToRow(t) {
+  return {
+    id: t.id, session_id: t.session_id || null, date: t.date, heure: t.heure,
+    categorie: t.categorie, prestation: t.prestation,
+    montant: t.montant, paiement: t.paiement, type: t.type || 'prestation'
+  };
+}
+
+// Marque les IDs envoyés comme synced en RE-LISANT le localStorage actuel
+// (évite la race condition où une nouvelle saisie pendant l'await serait écrasée).
+function _markSynced(idsToMark, errorByIdMap) {
+  const fresh = getTransactions();
+  const set = new Set(idsToMark);
+  let changed = false;
+  fresh.forEach(t => {
+    if (set.has(t.id) && !t._synced) {
+      t._synced = true;
+      delete t._sync_error;
+      changed = true;
+    }
+    if (errorByIdMap && errorByIdMap.has(t.id)) {
+      t._sync_error = errorByIdMap.get(t.id);
+      changed = true;
+    }
+  });
+  if (changed) setJSON('nt_transactions', fresh);
+}
+
+// Upsert un batch avec timeout 30s. Retourne {ok, error, status}.
+async function _upsertBatch(sb, rows) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30000);
+  try {
+    const { error, status } = await sb.from(TX_TABLE).upsert(rows, { onConflict: 'id' }).abortSignal(controller.signal);
+    clearTimeout(timer);
+    return { ok: !error, error, status };
+  } catch(e) {
+    clearTimeout(timer);
+    return { ok: false, error: e, status: 0 };
+  }
+}
+
+// Fix race condition + erreurs visibles + isolation des transactions pourries.
 async function syncPending() {
   const sb = getSbClient();
   if (!sb || !navigator.onLine) { updateSyncBadge(); return; }
   const txs = getTransactions();
   const pending = txs.filter(t => !t._synced);
-  if (pending.length === 0) { updateSyncBadge(); return; }
+  if (pending.length === 0) { _stopSyncRetryLoop(); updateSyncBadge(); return; }
 
   const badge = document.getElementById('sync-badge');
   const label = document.getElementById('sync-label');
@@ -2944,18 +3049,76 @@ async function syncPending() {
 
   try {
     await ensureSbAuth();
-    const rows = pending.map(t => ({
-      id: t.id, session_id: t.session_id || null, date: t.date, heure: t.heure,
-      categorie: t.categorie, prestation: t.prestation,
-      montant: t.montant, paiement: t.paiement, type: t.type || 'prestation'
-    }));
-    const { error } = await sb.from(TX_TABLE).upsert(rows, { onConflict: 'id' });
-    if (!error) {
-      txs.forEach(t => { t._synced = true; });
-      setJSON('nt_transactions', txs);
+  } catch(e) {
+    console.warn('[sync] auth Supabase échouée:', e);
+    updateSyncBadge();
+    _startSyncRetryLoop();
+    return;
+  }
+
+  const rows = pending.map(_txToRow);
+
+  // 1ère tentative : tout en bloc.
+  let res = await _upsertBatch(sb, rows);
+
+  if (res.ok) {
+    _markSynced(pending.map(t => t.id));
+    _stopSyncRetryLoop();
+    updateSyncBadge();
+    return;
+  }
+
+  console.warn('[sync] batch entier rejeté:', res.error);
+
+  // 2ème tentative : par lots de 10.
+  const sentIds = [];
+  const errorByIdMap = new Map();
+  const chunks = [];
+  for (let i = 0; i < rows.length; i += 10) chunks.push(rows.slice(i, i + 10));
+
+  for (const chunk of chunks) {
+    const r = await _upsertBatch(sb, chunk);
+    if (r.ok) {
+      chunk.forEach(row => sentIds.push(row.id));
+    } else {
+      // Le lot pose souci → tester ligne par ligne pour isoler la coupable.
+      for (const row of chunk) {
+        const r2 = await _upsertBatch(sb, [row]);
+        if (r2.ok) {
+          sentIds.push(row.id);
+        } else {
+          const msg = (r2.error && (r2.error.message || r2.error.code)) || 'erreur inconnue';
+          errorByIdMap.set(row.id, msg);
+          console.warn(`[sync] tx ${row.id} rejetée:`, msg);
+        }
+      }
     }
-  } catch(e) {}
+  }
+
+  _markSynced(sentIds, errorByIdMap);
+
+  if (errorByIdMap.size > 0) {
+    // Au moins une transaction est bloquée → garder le retry actif pour les autres futures.
+    _startSyncRetryLoop();
+  } else {
+    _stopSyncRetryLoop();
+  }
   updateSyncBadge();
+}
+
+// Retry périodique (toutes les 60s) tant qu'il y a du pending non en erreur.
+let _syncRetryInterval = null;
+function _startSyncRetryLoop() {
+  if (_syncRetryInterval) return;
+  _syncRetryInterval = setInterval(() => {
+    if (!navigator.onLine) return;
+    const pending = getTransactions().filter(t => !t._synced && !t._sync_error);
+    if (pending.length === 0) { _stopSyncRetryLoop(); return; }
+    syncPending();
+  }, 60000);
+}
+function _stopSyncRetryLoop() {
+  if (_syncRetryInterval) { clearInterval(_syncRetryInterval); _syncRetryInterval = null; }
 }
 
 async function testAndSaveSync() {
@@ -3005,41 +3168,113 @@ async function checkForUpdate() {
   badge.classList.remove('visible');
 }
 
+// Affiche l'overlay plein écran avec barre de progression et messages d'étape.
+function _showUpdateOverlay() {
+  let ov = document.getElementById('update-overlay');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'update-overlay';
+    ov.innerHTML = `
+      <div class="update-overlay-card">
+        <div class="update-overlay-title">Mise à jour en cours</div>
+        <div class="update-overlay-release" id="update-overlay-release"></div>
+        <div class="update-overlay-step" id="update-overlay-step">Vérification…</div>
+        <div class="update-overlay-bar"><div class="update-overlay-bar-fill" id="update-overlay-bar-fill"></div></div>
+        <div class="update-overlay-hint">Merci de patienter quelques secondes.</div>
+      </div>`;
+    document.body.appendChild(ov);
+  }
+  ov.classList.add('visible');
+}
+function _setUpdateStep(text, pct) {
+  const stepEl = document.getElementById('update-overlay-step');
+  const barEl = document.getElementById('update-overlay-bar-fill');
+  if (stepEl) stepEl.textContent = text;
+  if (barEl) barEl.style.width = Math.min(100, Math.max(0, pct)) + '%';
+}
+function _setUpdateRelease(message) {
+  const el = document.getElementById('update-overlay-release');
+  if (el && message) el.textContent = '« ' + message + ' »';
+}
+async function _fetchReleaseInfo() {
+  try {
+    const res = await fetch('./release.json?cb=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch(e) { return null; }
+}
+function _hideUpdateOverlay(success) {
+  const ov = document.getElementById('update-overlay');
+  if (!ov) return;
+  ov.classList.toggle('error', !success);
+  setTimeout(() => ov.classList.remove('visible'), success ? 400 : 1500);
+}
+
 async function forceUpdate() {
   const res = document.getElementById('update-result');
-  res.style.color = 'var(--gray)';
-  res.textContent = 'Recherche de mises à jour…';
+  if (res) { res.style.color = 'var(--gray)'; res.textContent = ''; }
+  _showUpdateOverlay();
+  _setUpdateStep('Recherche de la dernière version…', 10);
+
+  // Fetch le message du déploiement en cours pour l'afficher pendant l'install.
+  _fetchReleaseInfo().then(info => {
+    if (info && info.message) _setUpdateRelease(info.message);
+  });
+
   try {
-    if ('serviceWorker' in navigator) {
-      const reg = await navigator.serviceWorker.getRegistration();
-      if (reg) {
-        await reg.update();
-        if (reg.waiting) {
-          reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-          res.style.color = 'var(--green)';
-          res.textContent = '✓ Nouvelle version installée ! L\'app va se recharger…';
-          setTimeout(() => window.location.reload(), 1500);
-          return;
-        }
-      }
+    if (!('serviceWorker' in navigator)) {
+      throw new Error('Service worker non supporté');
     }
-    // Also force reload from network
-    const response = await fetch('./index.html', { cache: 'no-store' });
-    if (response.ok) {
-      if ('caches' in window) {
-        const cache = await caches.open('natura-tif-v2');
-        await cache.put(new Request('./index.html'), response);
-      }
-      res.style.color = 'var(--green)';
-      res.textContent = '✓ Application à jour ! Rechargement…';
-      setTimeout(() => window.location.reload(), 1500);
-    } else {
-      res.style.color = 'var(--red)';
-      res.textContent = 'Impossible de vérifier (pas de connexion internet).';
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (!reg) throw new Error('Aucun service worker enregistré');
+
+    _setUpdateStep('Téléchargement…', 30);
+    await reg.update();
+
+    // Si une version attend déjà → activer.
+    let waiting = reg.waiting;
+
+    // Si pas encore en waiting, attendre l'event updatefound (max 5s).
+    if (!waiting && reg.installing) {
+      _setUpdateStep('Installation de la nouvelle version…', 50);
+      await new Promise(resolve => {
+        const sw = reg.installing;
+        const timeout = setTimeout(resolve, 5000);
+        sw.addEventListener('statechange', () => {
+          if (sw.state === 'installed') { clearTimeout(timeout); resolve(); }
+        });
+      });
+      waiting = reg.waiting;
     }
+
+    if (!waiting) {
+      // Pas de nouvelle version disponible → recharger juste pour ré-essayer un fetch frais.
+      _setUpdateStep('Aucune nouvelle version, rechargement simple…', 80);
+      setTimeout(() => window.location.reload(), 800);
+      return;
+    }
+
+    _setUpdateStep('Activation de la nouvelle version…', 70);
+    waiting.postMessage({ type: 'SKIP_WAITING' });
+
+    // Attendre que le nouveau SW prenne le contrôle, puis reload.
+    await new Promise(resolve => {
+      const handler = () => {
+        navigator.serviceWorker.removeEventListener('controllerchange', handler);
+        resolve();
+      };
+      navigator.serviceWorker.addEventListener('controllerchange', handler);
+      setTimeout(resolve, 5000); // fallback safety
+    });
+
+    _setUpdateStep('Redémarrage de l\'application…', 95);
+    setTimeout(() => window.location.reload(), 600);
   } catch(e) {
-    res.style.color = 'var(--red)';
-    res.textContent = 'Erreur : pas de connexion internet.';
+    console.warn('[update] échec:', e);
+    _setUpdateStep('Erreur : ' + (e.message || 'mise à jour impossible'), 0);
+    _hideUpdateOverlay(false);
+    if (res) { res.style.color = 'var(--red)'; res.textContent = 'Erreur : ' + (e.message || 'mise à jour impossible.'); }
+    return;
   }
 }
 
@@ -3122,6 +3357,59 @@ function init() {
   }
   // Initial sync if online and config exists
   if (navigator.onLine) { syncPending(); checkForUpdate(); }
+  // Check périodique de mise à jour (toutes les 5 min) — pour que Gaëlle voie le badge
+  // sans devoir reload, si Vincent push une nouvelle version pendant qu'elle utilise l'app.
+  setInterval(() => { if (navigator.onLine) checkForUpdate(); }, 5 * 60 * 1000);
+
+  // En mode test (localhost) uniquement : check des modifs locales pas encore poussées en prod.
+  // Affiche un badge orange "↑" sur la roue crantée pour rappeler à Vincent qu'il a un truc à déployer.
+  if (IS_TEST) {
+    checkLocalChanges();
+    setInterval(checkLocalChanges, 30 * 1000);
+  }
+}
+
+// Restaure le badge depuis le localStorage AVANT le fetch — évite le "trou" pendant le clone (~3-5s).
+function _restoreBadgeFromCache() {
+  const badge = document.getElementById('settings-badge');
+  if (!badge) return;
+  try {
+    const cached = localStorage.getItem('nt_pending_deploy_count');
+    if (cached && parseInt(cached, 10) > 0) {
+      const n = parseInt(cached, 10);
+      badge.classList.add('visible', 'pending-deploy');
+      badge.textContent = n > 9 ? '9+' : String(n);
+    }
+  } catch(e) {}
+}
+
+async function checkLocalChanges() {
+  const badge = document.getElementById('settings-badge');
+  if (!badge) return;
+  // 1) Affiche immédiatement le dernier état connu (UX fluide)
+  _restoreBadgeFromCache();
+  // 2) Puis vérifie via l'API et met à jour
+  try {
+    const res = await fetch('/api/diff-summary', { cache: 'no-store' });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.has_changes) {
+      badge.classList.add('visible', 'pending-deploy');
+      badge.textContent = data.count > 9 ? '9+' : String(data.count);
+      badge.title = 'Modifications locales à déployer : ' + (data.files || []).join(', ');
+      try { localStorage.setItem('nt_pending_deploy_count', String(data.count)); } catch(e) {}
+    } else {
+      badge.classList.remove('pending-deploy');
+      try { localStorage.removeItem('nt_pending_deploy_count'); } catch(e) {}
+      // Ne pas masquer le badge ici car checkForUpdate() peut l'avoir mis pour autre raison
+      if (!badge.classList.contains('update-available')) {
+        badge.classList.remove('visible');
+        badge.textContent = '';
+      }
+    }
+  } catch(e) {
+    // Endpoint inaccessible (pas en mode test, ou serveur down) — on garde le cache local.
+  }
 }
 
 init();

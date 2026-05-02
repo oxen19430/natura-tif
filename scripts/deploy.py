@@ -45,9 +45,10 @@ GIT_USER_EMAIL = 'electrosoundstyleproject@gmail.com'
 GIT_USER_NAME = 'Vincent GIBERT'
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DEPLOY_FILES = ['index.html', 'cockpit.html', 'admin.html', 'analytics.html', 'sw.js', 'manifest.json', 'icon-192.png', 'icon-512.png', 'serve.py', '.gitignore']
+DEPLOY_FILES = ['index.html', 'sw.js', 'manifest.json', 'icon-192.png', 'icon-512.png', 'serve.py', '.gitignore', 'release.json']
 DEPLOY_DIRS = ['scripts']  # tout le contenu sera copié
-ASSET_FILES = ['index.html', 'cockpit.html', 'admin.html', 'analytics.html', 'manifest.json', 'icon-192.png', 'icon-512.png']  # déclencheurs de bump sw.js
+ASSET_FILES = ['index.html', 'manifest.json', 'icon-192.png', 'icon-512.png']  # déclencheurs de bump sw.js
+# Note : release.json n'est pas un asset déclencheur — sa modif seule (ex juste le message) ne doit pas bumper sw.js.
 
 CTX = ssl.create_default_context()
 
@@ -307,12 +308,14 @@ def main():
         return 2
     log(f'   ✓ {len(checks)} checks ok', args)
 
-    # Sauvegarde du contenu d'origine de sw.js et CHANGELOG.md AVANT toute modification locale.
+    # Sauvegarde du contenu d'origine de sw.js, CHANGELOG.md et release.json AVANT toute modification locale.
     # Utilisé pour rollback si le push échoue, afin de garder local et prod cohérents.
     sw_path = PROJECT_ROOT / 'sw.js'
     chlog_path = PROJECT_ROOT / 'CHANGELOG.md'
+    release_path = PROJECT_ROOT / 'release.json'
     sw_original = sw_path.read_text(encoding='utf-8') if sw_path.exists() else None
     chlog_original = chlog_path.read_text(encoding='utf-8') if chlog_path.exists() else None
+    release_original = release_path.read_text(encoding='utf-8') if release_path.exists() else None
 
     asset_changed = any(c.get('asset_changed') for c in checks)
     if asset_changed and not args.no_bump:
@@ -326,17 +329,31 @@ def main():
     log('\n3. Update CHANGELOG.md...', args)
     update_changelog(args.message, sw_v, changed, args)
 
+    # release.json : message simple visible par Gaëlle dans l'overlay de mise à jour.
+    log('\n3b. Écriture release.json...', args)
+    release_payload = {
+        'version': sw_v,
+        'message': args.message,
+        'deployed_at': datetime.now(timezone.utc).astimezone().isoformat(),
+    }
+    release_path.write_text(json.dumps(release_payload, ensure_ascii=False, indent=2), encoding='utf-8', newline='\n')
+    log(f'   → release.json écrit (v{sw_v}, "{args.message}")', args)
+
     log('\n4. Git deploy...', args)
     result = run_git_deploy(args.message, args)
 
-    # Rollback si le push a échoué : on remet sw.js et CHANGELOG.md à leur état d'origine,
-    # sinon le local et la prod divergent (CHANGELOG dit v12 mais prod sert v11).
+    # Rollback si le push a échoué : on remet sw.js, CHANGELOG.md et release.json à leur état d'origine,
+    # sinon le local et la prod divergent.
     if not result.get('ok') and result.get('step') == 'push' and not args.dry_run:
-        log('\n⚠ Push échoué — rollback de sw.js et CHANGELOG.md...', args)
+        log('\n⚠ Push échoué — rollback de sw.js, CHANGELOG.md et release.json...', args)
         if sw_original is not None:
             sw_path.write_text(sw_original, encoding='utf-8', newline='\n')
         if chlog_original is not None:
             chlog_path.write_text(chlog_original, encoding='utf-8', newline='\n')
+        if release_original is not None:
+            release_path.write_text(release_original, encoding='utf-8', newline='\n')
+        elif release_path.exists():
+            release_path.unlink()  # release.json n'existait pas avant — on le supprime
         log('   ✓ Fichiers locaux rétablis. Relance le déploiement après avoir réglé l\'auth.', args)
 
     out = {
@@ -352,10 +369,48 @@ def main():
     # Log persistant dans deploy.log (succès ET échec).
     write_deploy_log(args, out)
 
+    # Smoke test post-déploiement : seulement si le push a réussi (et pas en dry-run).
+    # Vérifie que la prod sert bien la nouvelle version (HTTP 200, IS_TEST whitelist, sw.js sync, Supabase OK).
+    smoke_ok = None
+    if out['ok'] and not result.get('no_changes') and not args.dry_run:
+        smoke_path = PROJECT_ROOT / 'scripts' / 'smoke_test.py'
+        if smoke_path.exists():
+            log('\n5. Smoke test post-déploiement (attente 30s pour propagation GitHub Pages)...', args)
+            try:
+                smoke_proc = subprocess.run(
+                    [sys.executable, str(smoke_path), '--wait', '30', '--quiet'],
+                    capture_output=True, text=True, timeout=120
+                )
+                try:
+                    smoke_out = json.loads(smoke_proc.stdout.strip())
+                    smoke_ok = smoke_out.get('ok', False)
+                    out['smoke'] = smoke_out
+                except (json.JSONDecodeError, ValueError):
+                    smoke_ok = False
+                    out['smoke'] = {'ok': False, 'fatal': 'sortie smoke_test illisible'}
+
+                if smoke_ok:
+                    log('   ✓ Smoke test vert — prod saine.', args)
+                else:
+                    log('   ⚠ Smoke test ROUGE — la prod n\'est peut-être pas saine.', args)
+                    failed_checks = [r for r in (out['smoke'].get('results') or []) if not r.get('ok')]
+                    for r in failed_checks:
+                        log(f'      ✗ {r.get("name", "?")}', args)
+                        for issue in (r.get('issues') or []):
+                            log(f'         → {issue}', args)
+                        if r.get('fatal'):
+                            log(f'         → {r["fatal"]}', args)
+                    log('   Lance `python3 scripts/smoke_test.py` à la main pour creuser, ou attends quelques minutes (propagation GitHub Pages).', args)
+            except subprocess.TimeoutExpired:
+                log('   ⚠ Smoke test timeout — à relancer manuellement.', args)
+                out['smoke'] = {'ok': False, 'fatal': 'timeout'}
+
     if args.quiet:
         print(json.dumps(out))
     elif out['ok']:
         log(f'\n✓ Déploiement OK. Commit {out.get("commit_hash", "?")}', args)
+        if smoke_ok is False:
+            log('  (mais smoke test rouge — voir au-dessus)', args)
     else:
         log(f'\n❌ Échec : {out.get("step", "?")} : {out.get("error", "?")}', args)
     return 0 if out['ok'] else 1

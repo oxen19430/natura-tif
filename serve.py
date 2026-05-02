@@ -15,11 +15,68 @@ import os
 import socketserver
 import subprocess
 import sys
+import threading
 import urllib.parse
 
 PORT = int(os.environ.get('NT_PORT', '8765'))
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 BACKUPS_DIR = os.path.join(PROJECT_DIR, 'backups')
+
+# ===== Cache module-level pour /api/diff-summary et /api/status =====
+# Permet le pré-warming au démarrage et le partage entre threads/handlers.
+_diff_cache = {'time': 0, 'data': None}
+_diff_cache_lock = threading.Lock()
+
+
+def compute_diff():
+    """Compare les DEPLOY_FILES local vs remote (clone /tmp). Cache 25s."""
+    import filecmp, shutil, tempfile, time as _t
+    # Garder synchro avec DEPLOY_FILES dans scripts/deploy.py
+    DEPLOY_FILES = ['index.html', 'sw.js', 'manifest.json', 'icon-192.png', 'icon-512.png', 'serve.py', '.gitignore', 'release.json']
+    GIT_REPO = 'https://github.com/oxen19430/natura-tif.git'
+
+    # Cache hit ?
+    with _diff_cache_lock:
+        now = _t.time()
+        if _diff_cache['data'] is not None and (now - _diff_cache['time']) < 25:
+            return _diff_cache['data']
+
+    tmp = tempfile.mkdtemp(prefix='nt_diff_')
+    try:
+        clone = subprocess.run(
+            ['git', 'clone', '--depth', '1', GIT_REPO, tmp],
+            capture_output=True, text=True, timeout=30
+        )
+        if clone.returncode != 0:
+            return {'error': 'clone failed', 'stderr': clone.stderr.strip()}
+        changed = []
+        for f in DEPLOY_FILES:
+            local_path = os.path.join(PROJECT_DIR, f)
+            remote_path = os.path.join(tmp, f)
+            if not os.path.exists(local_path):
+                continue
+            if not os.path.exists(remote_path):
+                changed.append(f)
+                continue
+            if not filecmp.cmp(local_path, remote_path, shallow=False):
+                changed.append(f)
+        data = {'has_changes': len(changed) > 0, 'count': len(changed), 'files': changed}
+        with _diff_cache_lock:
+            _diff_cache['time'] = _t.time()
+            _diff_cache['data'] = data
+        return data
+    except subprocess.TimeoutExpired:
+        return {'error': 'clone timeout'}
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def _warm_diff_cache():
+    """Lancé dans un thread daemon au démarrage du serveur pour que le 1er fetch soit instantané."""
+    try:
+        compute_diff()
+    except Exception as e:
+        sys.stderr.write(f'[warm cache] erreur : {e}\n')
 
 
 def run_subproc(args, timeout=180):
@@ -50,6 +107,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return self.handle_predeploy()
         if parsed.path == '/api/backups':
             return self.handle_backups_list()
+        if parsed.path == '/api/diff-summary':
+            return self.handle_diff_summary()
         return super().do_GET()
 
     def end_headers(self):
@@ -66,15 +125,21 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return self.handle_backup()
         self._send_json(404, {'error': 'not found'})
 
-    # ===== /api/status (legacy compatibilité minimale) =====
+    # ===== /api/status (utilisé par le cockpit) =====
+    # Retourne maintenant la vraie comparaison local vs remote (au lieu d'un fallback legacy
+    # qui mentait toujours "rien à déployer"). Champs supplémentaires gardés pour compat
+    # avec l'ancienne UI cockpit (changed_count, commits_ahead, last_commit).
     def handle_status_legacy(self):
-        # Compat avec ancien admin.html : on dit qu'il y a "rien à déployer" sans infos git
-        # car ce dossier n'est plus le repo (le repo vit sur le MacBook / GitHub).
+        diff = self._compute_diff()
+        if 'error' in diff:
+            return self._send_json(500, diff)
+        files = diff.get('files', [])
         return self._send_json(200, {
-            'changed_files': [], 'changed_count': 0, 'commits_ahead': 0,
+            'changed_files': files,
+            'changed_count': len(files),
+            'commits_ahead': 0,  # on ne calcule pas la distance commits, juste la différence de contenu
             'last_commit': '(repo source: github.com/oxen19430/natura-tif)',
-            'has_changes_to_deploy': False,
-            'note': 'Utilise /api/predeploy pour les checks réels',
+            'has_changes_to_deploy': len(files) > 0,
         })
 
     # ===== /api/predeploy (GET) — checks live =====
@@ -169,6 +234,17 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return self._send_json(500, {'step': 'parse', 'stdout': out, 'stderr': proc.stderr})
         return self._send_json(200, result)
 
+    # Délègue à la fonction module-level (cache + warming partagés)
+    def _compute_diff(self):
+        return compute_diff()
+
+    # ===== /api/diff-summary (GET) — léger : modifs locales pas encore en prod ? =====
+    def handle_diff_summary(self):
+        diff = self._compute_diff()
+        if 'error' in diff:
+            return self._send_json(500, diff)
+        return self._send_json(200, diff)
+
     # ===== /api/backups (GET) — liste snapshots =====
     def handle_backups_list(self):
         if not os.path.isdir(BACKUPS_DIR):
@@ -196,8 +272,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
 def main():
     socketserver.TCPServer.allow_reuse_address = True
+    # Pré-warm le cache diff dès le démarrage : le 1er fetch /api/diff-summary
+    # de la caisse aura sa réponse instantanée (pas de clone à attendre).
+    threading.Thread(target=_warm_diff_cache, daemon=True).start()
     with socketserver.TCPServer(('127.0.0.1', PORT), Handler) as httpd:
         print(f'Natura Tif (test) → http://localhost:{PORT}/')
+        print('  → pré-warming du cache diff en arrière-plan…')
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:
