@@ -20,6 +20,11 @@ _legacy_windows/
 .chrome-data/
 .serve.log
 .serve.pid
+naturatif-test.ico
+
+# Caches Python
+__pycache__/
+*.pyc
 
 # Backups Supabase (gros, regénérables)
 backups/snapshot-*.json

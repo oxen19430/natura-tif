@@ -32,7 +32,7 @@ def compute_diff():
     """Compare les DEPLOY_FILES local vs remote (clone /tmp). Cache 25s."""
     import filecmp, shutil, tempfile, time as _t
     # Garder synchro avec DEPLOY_FILES dans scripts/deploy.py
-    DEPLOY_FILES = ['index.html', 'sw.js', 'manifest.json', 'icon-192.png', 'icon-512.png', 'serve.py', '.gitignore', 'release.json']
+    DEPLOY_FILES = ['index.html', 'sw.js', 'manifest.json', 'icon-192.png', 'icon-512.png', 'serve.py', '.gitignore', '.gitattributes', 'release.json']
     GIT_REPO = 'https://github.com/oxen19430/natura-tif.git'
 
     # Cache hit ?

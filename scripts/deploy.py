@@ -11,8 +11,8 @@ Usage :
 Garde-fous (refus du push si rouge) :
 1. RLS prod doit être stricte : test live d'isolation sur transactions
 2. RLS test doit être stricte : pareil sur transactions_test
-3. index.html et cockpit.html doivent contenir signInAnonymously
-4. Si index.html, cockpit.html, manifest.json ou icon-*.png ont changé : bump auto sw.js
+3. index.html doit contenir signInAnonymously
+4. Si index.html, manifest.json ou icon-*.png ont changé : bump auto sw.js
 5. Pas de fichier de travail (deploy.log, _*.bat, sw.js.bak) tracké
 
 Workflow :
@@ -45,7 +45,7 @@ GIT_USER_EMAIL = 'electrosoundstyleproject@gmail.com'
 GIT_USER_NAME = 'Vincent GIBERT'
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DEPLOY_FILES = ['index.html', 'sw.js', 'manifest.json', 'icon-192.png', 'icon-512.png', 'serve.py', '.gitignore', 'release.json']
+DEPLOY_FILES = ['index.html', 'sw.js', 'manifest.json', 'icon-192.png', 'icon-512.png', 'serve.py', '.gitignore', '.gitattributes', 'release.json']
 DEPLOY_DIRS = ['scripts']  # tout le contenu sera copié
 ASSET_FILES = ['index.html', 'manifest.json', 'icon-192.png', 'icon-512.png']  # déclencheurs de bump sw.js
 # Note : release.json n'est pas un asset déclencheur — sa modif seule (ex juste le message) ne doit pas bumper sw.js.
@@ -149,10 +149,9 @@ def run_predeploy_checks(args):
     log('  → RLS test (transactions_test)...', args)
     checks.append({'name': 'RLS strict sur transactions_test', **check_rls_strict('transactions_test')})
 
-    # 3. signInAnonymously dans index.html et cockpit.html
-    log('  → signInAnonymously dans index.html et cockpit.html...', args)
+    # 3. signInAnonymously dans index.html
+    log('  → signInAnonymously dans index.html...', args)
     checks.append({'name': 'index.html contient signInAnonymously', **check_html_signin(PROJECT_ROOT / 'index.html')})
-    checks.append({'name': 'cockpit.html contient signInAnonymously', **check_html_signin(PROJECT_ROOT / 'cockpit.html')})
 
     # 4. sw.js version actuelle
     log('  → version actuelle sw.js...', args)
@@ -200,16 +199,44 @@ def bump_sw(current_v, args):
 # ============================================================
 def update_changelog(message, sw_v, changed_files, args):
     chlog = PROJECT_ROOT / 'CHANGELOG.md'
-    now = datetime.now(timezone.utc).astimezone().strftime('%Y-%m-%d %H:%M %Z')
+    # %Z donne un libelle localise et verbeux sous Windows FR
+    # (« Paris, Madrid (heure d'ete) ») : on ecrit l'ecart UTC, non ambigu.
+    _now = datetime.now(timezone.utc).astimezone()
+    now = _now.strftime('%Y-%m-%d %H:%M UTC%z')
     entry = f'\n## {now} — sw.js v{sw_v}\n\n**{message}**\n\n'
     if changed_files:
-        entry += 'Fichiers déployés :\n' + '\n'.join(f'- `{f}`' for f in sorted(changed_files)) + '\n'
+        # Chemins toujours en '/', y compris quand Windows les produit en '\\'.
+        _files = sorted(f.replace('\\', '/') for f in changed_files)
+        entry += 'Fichiers déployés :\n' + '\n'.join(f'- `{f}`' for f in _files) + '\n'
     if chlog.exists():
         existing = chlog.read_text(encoding='utf-8')
     else:
         existing = '# Changelog Natura Tif\n\nHistorique des déploiements en prod (`oxen19430.github.io/natura-tif`).\n'
     chlog.write_text(existing + entry, encoding='utf-8', newline='\n')
     log(f'  → CHANGELOG.md mis à jour', args)
+
+
+# ============================================================
+# Etat local : capture / restauration
+# ============================================================
+def snapshot_local(paths):
+    """Contenu d'origine des fichiers que le deploiement va reecrire.
+
+    None signifie que le fichier n'existait pas encore."""
+    return {p: (p.read_text(encoding='utf-8') if p.exists() else None) for p in paths}
+
+
+def restore_local(snapshot):
+    """Remet les fichiers dans l'etat capture par snapshot_local().
+
+    Utilise dans deux cas : push echoue (local et prod doivent rester
+    coherents) et --dry-run (une simulation ne doit rien laisser derriere
+    elle)."""
+    for path, original in snapshot.items():
+        if original is not None:
+            path.write_text(original, encoding='utf-8', newline='\n')
+        elif path.exists():
+            path.unlink()   # le fichier n'existait pas avant
 
 
 # ============================================================
@@ -313,9 +340,7 @@ def main():
     sw_path = PROJECT_ROOT / 'sw.js'
     chlog_path = PROJECT_ROOT / 'CHANGELOG.md'
     release_path = PROJECT_ROOT / 'release.json'
-    sw_original = sw_path.read_text(encoding='utf-8') if sw_path.exists() else None
-    chlog_original = chlog_path.read_text(encoding='utf-8') if chlog_path.exists() else None
-    release_original = release_path.read_text(encoding='utf-8') if release_path.exists() else None
+    local_snapshot = snapshot_local([sw_path, chlog_path, release_path])
 
     asset_changed = any(c.get('asset_changed') for c in checks)
     if asset_changed and not args.no_bump:
@@ -346,15 +371,17 @@ def main():
     # sinon le local et la prod divergent.
     if not result.get('ok') and result.get('step') == 'push' and not args.dry_run:
         log('\n⚠ Push échoué — rollback de sw.js, CHANGELOG.md et release.json...', args)
-        if sw_original is not None:
-            sw_path.write_text(sw_original, encoding='utf-8', newline='\n')
-        if chlog_original is not None:
-            chlog_path.write_text(chlog_original, encoding='utf-8', newline='\n')
-        if release_original is not None:
-            release_path.write_text(release_original, encoding='utf-8', newline='\n')
-        elif release_path.exists():
-            release_path.unlink()  # release.json n'existait pas avant — on le supprime
+        restore_local(local_snapshot)
         log('   ✓ Fichiers locaux rétablis. Relance le déploiement après avoir réglé l\'auth.', args)
+
+    # --dry-run : la simulation a bien reecrit sw.js, CHANGELOG.md et
+    # release.json pour produire un apercu fidele. On les remet ensuite dans
+    # leur etat d'origine : une verification a blanc ne doit laisser aucune
+    # trace, sinon le CHANGELOG finit par documenter des deploiements qui
+    # n'ont jamais eu lieu.
+    if args.dry_run:
+        restore_local(local_snapshot)
+        log('\n   ↩ --dry-run : sw.js, CHANGELOG.md et release.json rétablis (aucune trace locale).', args)
 
     out = {
         'ok': result.get('ok', False),

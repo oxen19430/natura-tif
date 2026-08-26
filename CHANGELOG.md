@@ -47,3 +47,13 @@ Fichiers déployés :
 - `scripts/smoke_test.py`
 - `serve.py`
 - `sw.js`
+
+## 2026-08-26 21:29 UTC+0200 — sw.js v16
+
+**gitattributes LF, garde-fou cockpit retire, dry-run sans effet de bord**
+
+Fichiers déployés :
+- `.gitattributes`
+- `.gitignore`
+- `scripts/deploy.py`
+- `serve.py`

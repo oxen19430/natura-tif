@@ -1,0 +1,14 @@
+# Fins de ligne figees en LF, sur toutes les machines.
+#
+# Sans ce fichier, Git for Windows (core.autocrlf=true dans sa config
+# systeme, C:/Program Files/Git/etc/gitconfig) convertit les fichiers
+# texte en CRLF au moment du clone. Le clone de comparaison fabrique par
+# serve.py differe alors du dossier local sur chaque ligne, et le panneau
+# de deploiement annonce des fichiers modifies alors que le code est
+# rigoureusement identique a la prod. Constate le 25/08/2026 : 6 faux
+# positifs, dont index.html gonfle de 3418 octets pour 3418 lignes.
+* text=auto eol=lf
+
+# Binaires : aucune conversion, jamais.
+*.png binary
+*.ico binary
