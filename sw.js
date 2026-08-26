@@ -1,4 +1,4 @@
-const CACHE_NAME = 'natura-tif-v16';
+const CACHE_NAME = 'natura-tif-v18';
 const URLS_TO_CACHE = [
   './',
   './index.html',
@@ -30,6 +30,18 @@ self.addEventListener('message', event => {
 });
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
+
+  // Rien d'autre que des GET ne doit passer par le cache. La Cache API
+  // refuse deja les autres methodes, mais autant etre explicite.
+  if (event.request.method !== 'GET') return;
+
+  // JAMAIS de cache sur l'API Supabase. La strategie « cache d'abord »
+  // ci-dessous figeait la premiere reponse pour toujours : le test de
+  // connexion des Parametres pouvait repondre OK alors que Supabase etait
+  // injoignable, et toute lecture renvoyait des donnees perimees.
+  // Constate le 26/08/2026 dans le bac a sable.
+  if (url.hostname.endsWith('.supabase.co')) return;
+
   if (event.request.destination === 'document' || url.pathname.endsWith('.html') || url.pathname.endsWith('/')) {
     event.respondWith(
       fetch(event.request).then(response => {

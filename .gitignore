@@ -24,6 +24,10 @@ naturatif-test.ico
 
 # Caches Python
 __pycache__/
+charger-donnees-test.html
+
+# Document de travail Atelier (pas du code)
+ETAT.md
 *.pyc
 
 # Backups Supabase (gros, regénérables)

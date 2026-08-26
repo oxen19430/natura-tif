@@ -1515,13 +1515,27 @@ function showScreen(id) {
 }
 
 // ==================== HOME ====================
+
+// Nombre de clientes, et non nombre de lignes de transaction.
+// Un encaissement peut couvrir plusieurs personnes (couples), d'ou la cle
+// composee (encaissement, numero de cliente). Les lignes anterieures a
+// 08/2026 n'ont pas de client_no : elles retombent sur 1, ce qui revient a
+// compter un encaissement pour une cliente — approximation basse, tres
+// au-dessous des 56 % de surestimation d'avant, et exacte pour toute
+// nouvelle saisie.
+function compterClientes(txs) {
+  const vues = new Set();
+  txs.forEach(t => vues.add((t.session_id || t.id) + '#' + (t.client_no || 1)));
+  return vues.size;
+}
+
 function updateHome() {
   const today = todayStr();
   const txs = getTransactions().filter(t => t.date === today);
   const total = txs.reduce((s, t) => s + t.montant, 0);
   document.getElementById('home-date').textContent = formatDate(today);
   document.getElementById('home-total').textContent = formatMoney(total);
-  document.getElementById('home-count').textContent = txs.length;
+  document.getElementById('home-count').textContent = compterClientes(txs);
   renderMiniCharts(txs, total);
   renderLastTx(txs);
   updateSyncBadge();
@@ -1710,6 +1724,7 @@ function addEditItem(key, isSession, type, nom, prix, context) {
     montant: prix,
     paiement: refTx.paiement,
     type: type,
+    client_no: refTx.client_no || null,   // meme cliente que la ligne de reference
     _synced: false
   });
   setJSON('nt_transactions', txs);
@@ -2041,7 +2056,10 @@ function validerEncaissement() {
   const heure = nowTime();
   const txs = getTransactions();
 
-  encaissement.clients.forEach(c => {
+  // ci + 1 = numero de la cliente dans cet encaissement (1, 2, ...).
+  // Sans lui, impossible de distinguer « une cliente, deux prestations »
+  // de « deux clientes » : c'est ce qui faussait le compteur d'accueil.
+  encaissement.clients.forEach((c, ci) => {
     c.prestations.forEach(p => {
       txs.push({
         id: uuid(),
@@ -2053,6 +2071,7 @@ function validerEncaissement() {
         montant: p.prix,
         paiement: encaissement.paiement,
         type: 'prestation',
+        client_no: ci + 1,
         _synced: false
       });
     });
@@ -2071,6 +2090,7 @@ function validerEncaissement() {
       montant: p.prix,
       paiement: encaissement.paiement,
       type: 'produit',
+      client_no: 1,   // rattache a la 1re cliente, ou vente produit seule = 1 personne
       _synced: false
     });
   });
@@ -2996,7 +3016,8 @@ function _txToRow(t) {
   return {
     id: t.id, session_id: t.session_id || null, date: t.date, heure: t.heure,
     categorie: t.categorie, prestation: t.prestation,
-    montant: t.montant, paiement: t.paiement, type: t.type || 'prestation'
+    montant: t.montant, paiement: t.paiement, type: t.type || 'prestation',
+    client_no: t.client_no || null
   };
 }
 

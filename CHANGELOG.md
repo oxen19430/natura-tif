@@ -64,3 +64,12 @@ Fichiers déployés :
 
 Fichiers déployés :
 - `scripts/smoke_test.py`
+
+## 2026-08-26 21:58 UTC+0200 — sw.js v18
+
+**compteur clients : compte les clientes et non les lignes (client_no) + sw.js ne cache plus l'API Supabase**
+
+Fichiers déployés :
+- `.gitignore`
+- `index.html`
+- `sw.js`
