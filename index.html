@@ -1383,6 +1383,22 @@ body.test-mode { padding-top: 30px; }
 
   <div class="card" style="margin-top:20px;">
     <div style="font-size:14px; font-weight:700; color:var(--primary); margin-bottom:4px;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Sauvegarde sur fichier
+    </div>
+    <div style="font-size:13px; color:var(--gray); margin-bottom:12px; line-height:1.5;">
+      Enregistre une copie complète de la caisse dans un fichier, sans passer par internet.
+      À faire avant toute manipulation importante.
+    </div>
+    <div id="backup-result" style="font-size:13px;margin-bottom:8px;"></div>
+    <button class="btn btn-outline btn-small" onclick="exporterSauvegarde()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      EXPORTER UNE SAUVEGARDE
+    </button>
+  </div>
+
+  <div class="card" style="margin-top:20px;">
+    <div style="font-size:14px; font-weight:700; color:var(--primary); margin-bottom:4px;">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px;"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
       Mise à jour de l'application
     </div>
@@ -2519,6 +2535,93 @@ async function sendEmail() {
   setTimeout(() => {
     window.location.href = `mailto:${settings.email || ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   }, 500);
+}
+
+// ==================== SAUVEGARDE SUR FICHIER ====================
+
+// Copie complete de la caisse dans un fichier, sans internet.
+// Le salon n'a pas de connexion : les tickets n'atteignent Supabase que
+// lorsque Gaelle active le partage de connexion de son telephone. Entre deux
+// synchronisations, cette sauvegarde est la SEULE copie possible des donnees.
+const BACKUP_CLES = ['nt_transactions', 'nt_tarifs', 'nt_produits', 'nt_fonds', 'nt_fermetures', 'nt_settings'];
+
+function exporterSauvegarde() {
+  vibrate();
+  const el = document.getElementById('backup-result');
+  try {
+    const donnees = {};
+    BACKUP_CLES.forEach(cle => {
+      const brut = localStorage.getItem(LS_PREFIX + cle);
+      if (brut !== null) { try { donnees[cle] = JSON.parse(brut); } catch { donnees[cle] = brut; } }
+    });
+
+    const txs = Array.isArray(donnees.nt_transactions) ? donnees.nt_transactions : [];
+    const dates = txs.map(t => t.date).filter(Boolean).sort();
+    const enAttente = txs.filter(t => !t._synced).length;
+    const total = txs.reduce((s, t) => s + (Number(t.montant) || 0), 0);
+
+    const maintenant = new Date();
+    const horodatage = maintenant.toLocaleDateString('sv-SE') + '-' +
+                       String(maintenant.getHours()).padStart(2, '0') +
+                       String(maintenant.getMinutes()).padStart(2, '0');
+
+    const sauvegarde = {
+      format: 'natura-tif-sauvegarde',
+      version: 1,
+      exporte_le: maintenant.toISOString(),
+      mode: IS_TEST ? 'test' : 'production',
+      resume: {
+        transactions: txs.length,
+        non_synchronisees: enAttente,
+        premiere_date: dates[0] || null,
+        derniere_date: dates[dates.length - 1] || null,
+        total_euros: Math.round(total * 100) / 100
+      },
+      donnees: donnees
+    };
+
+    const texte = JSON.stringify(sauvegarde, null, 2);
+    const blob = new Blob([texte], { type: 'application/json' });
+    const nom = `NaturaTif-sauvegarde-${horodatage}.json`;
+
+    // Ce que l'exportateur doit pouvoir verifier d'un coup d'oeil.
+    const ko = Math.round(blob.size / 1024);
+    let recap = `<strong>${txs.length} transactions</strong>`;
+    if (dates.length) recap += ` du ${formatDate(dates[0])} au ${formatDate(dates[dates.length - 1])}`;
+    recap += ` — ${formatMoney(total)} — fichier de ${ko} Ko.`;
+    if (enAttente > 0) {
+      recap += `<br><span style="color:#c0392b;font-weight:700;">${enAttente} transaction(s) pas encore synchronisée(s)</span> — elles n'existent que sur cette tablette.`;
+    } else {
+      recap += `<br><span style="color:var(--green);">Tout est déjà synchronisé.</span>`;
+    }
+    el.innerHTML = recap;
+
+    partagerOuTelecharger(blob, nom, sauvegarde);
+  } catch (e) {
+    el.innerHTML = `<span style="color:#c0392b;">Échec de la sauvegarde : ${e.message}</span>`;
+  }
+}
+
+async function partagerOuTelecharger(blob, nom, sauvegarde) {
+  const fichier = new File([blob], nom, { type: 'application/json' });
+  const r = sauvegarde.resume;
+  const texte = `Sauvegarde Natura'Tif du ${new Date().toLocaleDateString('fr-FR')}\n` +
+                `${r.transactions} transactions, ${r.non_synchronisees} non synchronisée(s), ` +
+                `${r.total_euros} €.`;
+
+  // Android : partage natif (mail, Drive, messagerie...), comme l'export PDF.
+  if (navigator.canShare && navigator.canShare({ files: [fichier] })) {
+    try {
+      await navigator.share({ title: nom, text: texte, files: [fichier] });
+      return;
+    } catch (e) { /* annule par l'utilisateur : on retombe sur le telechargement */ }
+  }
+
+  // Sinon : telechargement direct.
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = nom; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 // ==================== TARIFS ====================

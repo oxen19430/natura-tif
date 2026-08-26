@@ -1,5 +1,5 @@
 {
-  "version": 18,
-  "message": "compteur clients : compte les clientes et non les lignes (client_no) + sw.js ne cache plus l'API Supabase",
-  "deployed_at": "2026-08-26T21:58:42.047501+02:00"
+  "version": 19,
+  "message": "sauvegarde sur fichier : export complet de la caisse sans passer par internet",
+  "deployed_at": "2026-08-26T22:29:47.964536+02:00"
 }

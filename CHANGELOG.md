@@ -73,3 +73,11 @@ Fichiers déployés :
 - `.gitignore`
 - `index.html`
 - `sw.js`
+
+## 2026-08-26 22:29 UTC+0200 — sw.js v19
+
+**sauvegarde sur fichier : export complet de la caisse sans passer par internet**
+
+Fichiers déployés :
+- `.gitignore`
+- `index.html`

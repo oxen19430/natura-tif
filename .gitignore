@@ -28,6 +28,7 @@ charger-donnees-test.html
 
 # Document de travail Atelier (pas du code)
 ETAT.md
+VENDREDI-AU-SALON.md
 *.pyc
 
 # Backups Supabase (gros, regénérables)
