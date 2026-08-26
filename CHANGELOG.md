@@ -57,3 +57,10 @@ Fichiers déployés :
 - `.gitignore`
 - `scripts/deploy.py`
 - `serve.py`
+
+## 2026-08-26 21:34 UTC+0200 — sw.js v16
+
+**smoke test : retrait des pages cockpit/admin/analytics supprimees en mai**
+
+Fichiers déployés :
+- `scripts/smoke_test.py`

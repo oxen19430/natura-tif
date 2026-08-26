@@ -3,8 +3,8 @@
 Smoke test post-déploiement Natura Tif.
 
 Vérifie en quelques secondes que la prod servie par GitHub Pages est saine :
-- 4 pages HTML accessibles (index, cockpit, admin, analytics)
-- Chacune a la condition IS_TEST whitelist sur oxen19430.github.io
+- index.html accessible (cockpit/admin/analytics ont ete retires du cloud en 05/2026)
+- La condition IS_TEST whitelist sur oxen19430.github.io est presente
 - Le bandeau MODE TEST a bien style="display:none" (pas de !important réintroduit)
 - sw.js prod = version locale (donc le déploiement a bien propagé)
 - Supabase auth anonyme + select transactions → OK
@@ -33,7 +33,10 @@ SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 HOSTNAME_PROD = 'oxen19430.github.io'
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-PAGES = ['index.html', 'cockpit.html', 'admin.html', 'analytics.html']
+# cockpit.html, admin.html et analytics.html ont ete retires du cloud en 05/2026
+# (pilotage via le dashboard local). Les laisser ici faisait echouer le smoke
+# test sur trois 404 parfaitement normaux.
+PAGES = ['index.html']
 
 CTX = ssl.create_default_context()
 
@@ -78,7 +81,7 @@ def check_page(name):
     if status != 200:
         issues.append(f'HTTP {status} (attendu 200)')
 
-    # 1. Condition IS_TEST whitelist (avec fallback sur la version inline du cockpit/admin/analytics)
+    # 1. Condition IS_TEST whitelist (le fallback inline couvre un HTML minifie)
     has_whitelist_const = f"hostname !== '{HOSTNAME_PROD}'" in body
     has_whitelist_inline = f"location.hostname!=='{HOSTNAME_PROD}'" in body
     if not (has_whitelist_const or has_whitelist_inline):
