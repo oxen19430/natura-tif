@@ -45,9 +45,9 @@ GIT_USER_EMAIL = 'electrosoundstyleproject@gmail.com'
 GIT_USER_NAME = 'Vincent GIBERT'
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DEPLOY_FILES = ['index.html', 'sw.js', 'manifest.json', 'icon-192.png', 'icon-512.png', 'serve.py', '.gitignore', '.gitattributes', 'release.json']
+DEPLOY_FILES = ['index.html', 'backup.js', 'sw.js', 'manifest.json', 'icon-192.png', 'icon-512.png', 'serve.py', '.gitignore', '.gitattributes', 'release.json']
 DEPLOY_DIRS = ['scripts']  # tout le contenu sera copié
-ASSET_FILES = ['index.html', 'manifest.json', 'icon-192.png', 'icon-512.png']  # déclencheurs de bump sw.js
+ASSET_FILES = ['index.html', 'backup.js', 'manifest.json', 'icon-192.png', 'icon-512.png']  # déclencheurs de bump sw.js
 # Note : release.json n'est pas un asset déclencheur — sa modif seule (ex juste le message) ne doit pas bumper sw.js.
 
 CTX = ssl.create_default_context()

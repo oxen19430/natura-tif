@@ -820,7 +820,9 @@ tr:nth-child(even) { background: var(--gray-light); }
   font-weight: 500;
   z-index: 999;
   box-shadow: var(--shadow-lg);
-  max-width: 280px;
+  width: min(360px, calc(100vw - 28px));
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
   line-height: 1.4;
 }
 .sync-tooltip.visible { display: block; animation: fadeIn 0.15s ease; }
@@ -1479,7 +1481,10 @@ const TX_TABLE = IS_TEST ? 'transactions_test' : 'transactions';
 
 // ==================== STORAGE ====================
 function getJSON(key, def) { try { return JSON.parse(localStorage.getItem(LS_PREFIX + key)) || def; } catch { return def; } }
-function setJSON(key, val) { localStorage.setItem(LS_PREFIX + key, JSON.stringify(val)); }
+function setJSON(key, val) {
+  localStorage.setItem(LS_PREFIX + key, JSON.stringify(val));
+  if (window.NaturaBackup?.KEYS.includes(key)) window.naturaBackup?.changed();
+}
 function getTarifs() { return getJSON('nt_tarifs', JSON.parse(JSON.stringify(DEFAULT_TARIFS))); }
 function getProduits() { return getJSON('nt_produits', []); }
 function getTransactions() { return getJSON('nt_transactions', []); }
@@ -2981,6 +2986,7 @@ function getSbClient() {
 let _syncStatusText = '';
 
 function updateSyncBadge() {
+  if (window.naturaBackupState) { renderFullBackup(window.naturaBackupState); return; }
   const floatEl = document.getElementById('sync-float');
   const cfg = getSyncConfig();
   let cls = 'sf-unconfigured';
@@ -2999,7 +3005,7 @@ function updateSyncBadge() {
       text = `${pending} encaissement${pending > 1 ? 's' : ''} en attente de synchronisation…`;
     } else {
       cls = 'sf-ok';
-      text = 'Toutes les données sont synchronisées.';
+      text = 'Encaissements marqués envoyés ; sauvegarde complète à vérifier.';
     }
   }
   if (floatEl) floatEl.className = 'sync-floating ' + cls;
@@ -3021,10 +3027,11 @@ function toggleSyncTooltip() {
   renderSyncPanel();
   tip.classList.add('visible');
   clearTimeout(_syncTooltipTimer);
-  _syncTooltipTimer = setTimeout(() => tip.classList.remove('visible'), 5000);
+  // Keep the panel open while the user checks or downloads a backup.
 }
 
 function renderSyncPanel() {
+  if (window.naturaBackup) { renderFullBackupPanel(); return; }
   const tip = document.getElementById('sync-tooltip');
   if (!tip) return;
   const cfg = getSyncConfig();
@@ -3052,6 +3059,7 @@ function renderSyncPanel() {
 }
 
 async function manualSync() {
+  if (window.naturaBackup) { vibrate(); return window.naturaBackup.run(true); }
   vibrate();
   const btn = document.querySelector('.sync-tooltip .sync-btn');
   const resultEl = document.getElementById('sync-manual-result');
@@ -3537,6 +3545,75 @@ async function checkLocalChanges() {
 }
 
 init();
+</script>
+<script src="./backup.js"></script>
+<script>
+function renderFullBackup(state) {
+  window.naturaBackupState = state;
+  const classes = { ok: 'sf-ok', working: 'sf-syncing', pending: 'sf-pending', offline: 'sf-offline', error: 'sf-offline' };
+  const cloud = document.getElementById('sync-float');
+  cloud.className = 'sync-floating ' + (classes[state.status] || 'sf-unconfigured');
+  cloud.title = state.message;
+  cloud.setAttribute('aria-label', 'Sauvegarde complète : ' + state.message);
+  if (document.getElementById('sync-tooltip').classList.contains('visible')) renderFullBackupPanel();
+}
+function renderFullBackupPanel() {
+  const el = document.getElementById('sync-tooltip');
+  const state = window.naturaBackupState || { status: 'pending', message: 'Sauvegarde à vérifier.' };
+  el.replaceChildren();
+  const title = document.createElement('strong');title.textContent = (IS_TEST ? 'TEST - ' : '') + 'Sauvegarde complète';el.appendChild(title);
+  const status = document.createElement('p');status.setAttribute('role', 'status');status.textContent = state.message;el.appendChild(status);
+  if (state.last) {
+    const last = document.createElement('p');
+    last.textContent = 'Dernière copie vérifiée : ' + new Date(state.last.created_at).toLocaleString('fr-FR') +
+      ' · ' + state.last.transactions + ' lignes · ' + formatMoney(state.last.total_euros);el.appendChild(last);
+  }
+  const help = document.createElement('p');help.textContent = 'Connectez la tablette au téléphone et gardez Natura’tif ouvert jusqu’à la confirmation.';el.appendChild(help);
+  if (state.detail) { const detail = document.createElement('p');detail.textContent = state.detail;el.appendChild(detail); }
+  const button = document.createElement('button');button.className = 'sync-btn';
+  button.textContent = state.status === 'working' ? 'Sauvegarde en cours…' : 'Sauvegarder maintenant';
+  button.disabled = state.status === 'working' || !navigator.onLine;button.onclick = manualSync;el.appendChild(button);
+  const history = document.createElement('button');history.className = 'sync-btn';history.style.marginTop = '8px';
+  history.textContent = 'Voir les copies précédentes';history.onclick = showBackupHistory;el.appendChild(history);
+  const result = document.createElement('div');result.id = 'full-backup-history';result.style.marginTop = '10px';el.appendChild(result);
+}
+async function showBackupHistory() {
+  const el = document.getElementById('full-backup-history');el.textContent = 'Chargement…';
+  try {
+    const copies = await window.naturaBackup.history();
+    el.textContent = copies.length ? 'Copies récentes de cette tablette. Appuyez pour télécharger :' : 'Aucune copie pour cette tablette.';
+    for (const copy of copies) {
+      const button = document.createElement('button');button.className = 'sync-btn';button.style.marginTop = '8px';
+      button.textContent = new Date(copy.created_at).toLocaleString('fr-FR') + ' · ' + copy.transaction_count + ' lignes · ' + formatMoney(copy.total_euros);
+      button.onclick = async () => {
+        button.disabled = true;
+        try {
+          const payload = await window.naturaBackup.download(copy.id);
+          const url = URL.createObjectURL(new Blob([payload], { type: 'application/json' }));
+          const link = document.createElement('a');link.href = url;
+          link.download = 'NaturaTif-sauvegarde-' + copy.mode + '-' + copy.created_at.replace(/[:.]/g, '-') + '.json';
+          link.click();setTimeout(() => URL.revokeObjectURL(url), 1000);
+        } catch (_) { showFlash('Téléchargement impossible. Réessayez avec Internet.'); }
+        finally { button.disabled = false; }
+      };el.appendChild(button);
+    }
+  } catch (_) { el.textContent = 'Impossible de lire les copies. Vérifiez Internet puis réessayez.'; }
+}
+window.naturaBackup = NaturaBackup.createManager({
+  storage: localStorage, prefix: LS_PREFIX, mode: IS_TEST ? 'test' : 'production', crypto: window.crypto,
+  client: getSbClient, authenticate: ensureSbAuth,
+  online: () => navigator.onLine, visible: () => document.visibilityState !== 'hidden', notify: renderFullBackup
+});
+const backupCloud = document.getElementById('sync-float');
+backupCloud.setAttribute('role', 'button');backupCloud.setAttribute('tabindex', '0');
+backupCloud.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault();toggleSyncTooltip(); } });
+window.naturaBackup.start();
+window.addEventListener('online', () => window.naturaBackup.run(true));
+window.addEventListener('offline', () => window.naturaBackup.run());
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') window.naturaBackup.run(true); });
+window.addEventListener('storage', event => {
+  if (NaturaBackup.KEYS.some(key => event.key === LS_PREFIX + key)) window.naturaBackup.changed();
+});
 </script>
 </body>
 </html>

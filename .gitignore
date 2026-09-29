@@ -12,6 +12,7 @@ sw_v6.js
 _legacy_windows/
 *.bat
 *.ps1
+*.command
 
 # Fichiers Mac
 .DS_Store

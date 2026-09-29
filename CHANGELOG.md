@@ -81,3 +81,15 @@ Fichiers déployés :
 Fichiers déployés :
 - `.gitignore`
 - `index.html`
+
+## 2026-09-29 06:41 UTC+0200 — sw.js v20
+
+**V20 sauvegarde supabase**
+
+Fichiers déployés :
+- `.gitignore`
+- `backup.js`
+- `index.html`
+- `scripts/deploy.py`
+- `serve.py`
+- `sw.js`

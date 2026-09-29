@@ -1,7 +1,8 @@
-const CACHE_NAME = 'natura-tif-v19';
+const CACHE_NAME = 'natura-tif-v20';
 const URLS_TO_CACHE = [
   './',
   './index.html',
+  './backup.js',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
