@@ -1,4 +1,4 @@
-const CACHE_NAME = 'natura-tif-v21';
+const CACHE_NAME = 'natura-tif-v22';
 const URLS_TO_CACHE = [
   './',
   './index.html',

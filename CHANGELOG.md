@@ -100,3 +100,10 @@ Fichiers déployés :
 
 Fichiers déployés :
 - `index.html`
+
+## 2026-10-05 12:33 UTC+0200 — sw.js v22
+
+**v22 texte mail comptable**
+
+Fichiers déployés :
+- `index.html`

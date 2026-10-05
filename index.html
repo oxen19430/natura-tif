@@ -2566,25 +2566,29 @@ async function sendEmail() {
   const recapPeriode = histoPeriodType === 'personnalisee'
     ? `du ${formatDate(start)} au ${formatDate(end)}`
     : moisAnnee;
-  const subject = `${settings.salon || 'Natura Tif'} — Récapitulatif ${recapPeriode}`;
-  let body = `${settings.salon || 'Natura Tif'} — Récapitulatif ${recapPeriode}\n\n`;
-  body += `Période : ${formatDate(start)} au ${formatDate(end)}\n`;
-  body += `Nombre d'encaissements : ${txs.length}\n\n`;
-  body += `TOTAL GÉNÉRAL : ${formatMoney(totalGen)}\n\n`;
-  body += `Espèces : ${formatMoney(totalEspeces)}\nCarte bancaire : ${formatMoney(totalCB)}\nChèque : ${formatMoney(totalCheque)}\n`;
-  if (settings.gerante) body += `\nCordialement,\n${settings.gerante}`;
+  const salon = settings.salon || 'Natura Tif';
+  const montant = v => Number(v).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/[\u202f\u00a0]/g, ' ') + ' €';
+  const subject = `${salon}, recettes du ${formatDate(start)} au ${formatDate(end)}`;
+  let body = `Bonjour,\n\n`;
+  body += `Je vous envoie le relevé des recettes du salon enregistrées sur ma caisse tablette du ${formatDate(start)} au ${formatDate(end)}.\n\n`;
+  body += `Total : ${montant(totalGen)}\n`;
+  body += `- Carte bancaire : ${montant(totalCB)}\n`;
+  body += `- Chèques : ${montant(totalCheque)}\n`;
+  body += `- Espèces : ${montant(totalEspeces)}\n\n`;
+  body += `Le détail est dans le PDF joint.\n\n`;
+  body += `N'hésitez pas si vous avez besoin d'un autre format ou d'informations complémentaires.\n\n`;
+  body += `Cordialement,\n`;
+  if (settings.gerante) body += `${settings.gerante}\n`;
+  body += `Salon ${salon}`;
 
   const pdfFile = new File([blob], fileName, { type: 'application/pdf' });
 
   // Android: use Web Share API to share PDF with email body
   if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
     try {
-      const shareBody = settings.email
-        ? `Destinataire : ${settings.email}\n\n${body}`
-        : body;
       await navigator.share({
         title: subject,
-        text: shareBody,
+        text: body,
         files: [pdfFile]
       });
       return;
