@@ -93,3 +93,10 @@ Fichiers déployés :
 - `scripts/deploy.py`
 - `serve.py`
 - `sw.js`
+
+## 2026-10-05 11:54 UTC+0200 — sw.js v21
+
+**v21 periode personnalisee export**
+
+Fichiers déployés :
+- `index.html`

@@ -675,6 +675,14 @@ tr:nth-child(even) { background: var(--gray-light); }
 .tabs { display: flex; gap: 8px; margin-bottom: 16px; overflow-x: auto; }
 .tab { flex: 1; min-height: 48px; padding: 10px; border: 2px solid var(--border); border-radius: 12px; background: #FDFCF8; font-size: 15px; font-weight: 600; cursor: pointer; text-align: center; white-space: nowrap; font-family: 'Inter', sans-serif; transition: all 0.15s; }
 .tab.active { background: var(--primary); color: white; border-color: var(--primary); }
+.histo-custom { width: 100%; white-space: normal; }
+.histo-date-range { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+.histo-date-range .form-group { min-width: 0; margin-bottom: 0; }
+.histo-date-range .form-input { width: 100%; min-width: 0; }
+.histo-date-range[hidden], .histo-nav-btn[hidden] { display: none; }
+.histo-date-error { color: var(--red); font-size: 14px; margin: 12px 0; }
+#screen-histo button:disabled { opacity: 0.45; cursor: not-allowed; }
+@media (max-width: 460px) { .histo-date-range { grid-template-columns: 1fr; } }
 
 /* ===== Modal ===== */
 .overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.45); z-index: 100; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(4px); }
@@ -1195,11 +1203,23 @@ body.test-mode { padding-top: 30px; }
       <button class="tab" onclick="setHistoPeriod('mois', this)">Mois</button>
       <button class="tab" onclick="setHistoPeriod('annee', this)">Année</button>
     </div>
+    <button class="tab histo-custom" onclick="setHistoPeriod('personnalisee', this)">Période personnalisée</button>
+    <div class="histo-date-range" id="histo-date-range" hidden>
+      <div class="form-group">
+        <label class="form-label" for="histo-date-start">Date de début</label>
+        <input type="date" class="form-input" id="histo-date-start" onchange="applyFilters()" aria-describedby="histo-date-error">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="histo-date-end">Date de fin</label>
+        <input type="date" class="form-input" id="histo-date-end" onchange="applyFilters()" aria-describedby="histo-date-error">
+      </div>
+    </div>
+    <p class="histo-date-error" id="histo-date-error" role="alert" hidden></p>
     <!-- Period navigation -->
     <div style="display:flex; align-items:center; justify-content:space-between; margin:12px 0; gap:8px;">
-      <button class="btn btn-outline btn-icon-only btn-small" onclick="histoNav(-1)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+      <button class="btn btn-outline btn-icon-only btn-small histo-nav-btn" onclick="histoNav(-1)" aria-label="Période précédente"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
       <div style="flex:1; text-align:center; font-weight:700; font-size:16px; color:var(--primary);" id="histo-period-label"></div>
-      <button class="btn btn-outline btn-icon-only btn-small" onclick="histoNav(1)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+      <button class="btn btn-outline btn-icon-only btn-small histo-nav-btn" onclick="histoNav(1)" aria-label="Période suivante"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
     </div>
     <!-- Filters -->
     <div style="display:flex; gap:8px; margin-bottom:12px;">
@@ -1221,10 +1241,10 @@ body.test-mode { padding-top: 30px; }
     </div>
     <div id="histo-results"></div>
     <div class="btn-group" style="margin-top:16px;">
-      <button class="btn btn-primary btn-noSquare" onclick="exportPDF()">
+      <button class="btn btn-primary btn-noSquare" id="histo-export-pdf" onclick="exportPDF()">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 12 15 15"/></svg> EXPORTER EN PDF
       </button>
-      <button class="btn btn-outline btn-noSquare" onclick="sendEmail()">
+      <button class="btn btn-outline btn-noSquare" id="histo-send-email" onclick="sendEmail()">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22 6 12 13 2 6"/></svg> ENVOYER À LA COMPTABLE
       </button>
     </div>
@@ -2183,7 +2203,6 @@ function saveFond() {
 // ==================== HISTORIQUE ====================
 let histoPeriodType = 'jour';
 let histoOffset = 0; // 0 = current, -1 = previous, etc.
-let lastFiltered = [];
 let histoGrouped = false;
 
 function toggleHistoView() {
@@ -2199,12 +2218,17 @@ function setHistoPeriod(type, btn) {
   vibrate();
   histoPeriodType = type;
   histoOffset = 0;
+  if (type === 'personnalisee') {
+    document.getElementById('filter-cat').value = 'tous';
+    document.getElementById('filter-pay').value = 'tous';
+  }
   document.querySelectorAll('#screen-histo .tab').forEach(t => t.classList.remove('active'));
   if (btn) btn.classList.add('active');
   applyFilters();
 }
 
 function histoNav(dir) {
+  if (histoPeriodType === 'personnalisee') return;
   vibrate();
   histoOffset += dir;
   applyFilters();
@@ -2213,6 +2237,7 @@ function histoNav(dir) {
 function getFilterDates() {
   const today = new Date();
   let start, end, label;
+  let error = '';
 
   if (histoPeriodType === 'jour') {
     const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + histoOffset);
@@ -2237,21 +2262,45 @@ function getFilterDates() {
     start = year + '-01-01';
     end = year + '-12-31';
     label = 'Année ' + year;
+  } else if (histoPeriodType === 'personnalisee') {
+    start = document.getElementById('histo-date-start').value;
+    end = document.getElementById('histo-date-end').value;
+    if (!start || !end) error = 'Choisissez une date de début et une date de fin.';
+    else if (start > end) error = 'La date de fin doit être égale ou postérieure à la date de début.';
+    label = error ? 'Période personnalisée' : `Du ${formatDate(start)} au ${formatDate(end)}`;
   }
 
+  document.getElementById('histo-date-range').hidden = histoPeriodType !== 'personnalisee';
+  document.querySelectorAll('#screen-histo .histo-nav-btn').forEach(btn => {
+    btn.hidden = histoPeriodType === 'personnalisee';
+  });
+  const errorEl = document.getElementById('histo-date-error');
+  errorEl.textContent = error;
+  errorEl.hidden = !error;
+  document.getElementById('histo-export-pdf').disabled = !!error;
+  document.getElementById('histo-send-email').disabled = !!error;
   document.getElementById('histo-period-label').textContent = label;
-  return { start, end };
+  return error ? null : { start, end };
 }
 
-function applyFilters() {
-  const { start, end } = getFilterDates();
+function getFilteredTransactions(start, end) {
   const cat = document.getElementById('filter-cat').value;
   const pay = document.getElementById('filter-pay').value;
   let txs = getTransactions().filter(t => t.date >= start && t.date <= end);
   if (cat !== 'tous') txs = txs.filter(t => t.categorie === cat);
   if (pay !== 'tous') txs = txs.filter(t => t.paiement === pay);
   txs.sort((a, b) => (b.date + b.heure).localeCompare(a.date + a.heure));
-  lastFiltered = txs;
+  return txs;
+}
+
+function applyFilters() {
+  const dates = getFilterDates();
+  if (!dates) {
+    document.getElementById('histo-results').innerHTML = '';
+    return;
+  }
+  const { start, end } = dates;
+  const txs = getFilteredTransactions(start, end);
   renderHisto(txs, start, end);
 }
 
@@ -2424,7 +2473,9 @@ function saveHistoEdit(key, isSession) {
 
 // ==================== EXPORT PDF ====================
 function exportPDF() {
-  const { blob, fileName } = buildPDFBlob();
+  const pdf = buildPDFBlob();
+  if (!pdf) return;
+  const { blob, fileName } = pdf;
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href = url; a.download = fileName; a.click();
   URL.revokeObjectURL(url);
@@ -2432,11 +2483,13 @@ function exportPDF() {
 
 // ==================== EMAIL ====================
 function buildPDFBlob() {
+  const dates = getFilterDates();
+  if (!dates) return null;
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
   const settings = getSettings();
-  const { start, end } = getFilterDates();
-  const txs = lastFiltered;
+  const { start, end } = dates;
+  const txs = getFilteredTransactions(start, end);
 
   doc.setFontSize(20);
   doc.setTextColor(91, 87, 35);
@@ -2504,12 +2557,17 @@ function buildPDFBlob() {
 
 async function sendEmail() {
   const settings = getSettings();
-  const { blob, fileName, totalGen, totalEspeces, totalCB, totalCheque, start, end, txs } = buildPDFBlob();
+  const pdf = buildPDFBlob();
+  if (!pdf) return;
+  const { blob, fileName, totalGen, totalEspeces, totalCB, totalCheque, start, end, txs } = pdf;
   const moisNoms = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
   const d = new Date(start);
   const moisAnnee = moisNoms[d.getMonth()] + ' ' + d.getFullYear();
-  const subject = `${settings.salon || 'Natura Tif'} — Récapitulatif ${moisAnnee}`;
-  let body = `${settings.salon || 'Natura Tif'} — Récapitulatif ${moisAnnee}\n\n`;
+  const recapPeriode = histoPeriodType === 'personnalisee'
+    ? `du ${formatDate(start)} au ${formatDate(end)}`
+    : moisAnnee;
+  const subject = `${settings.salon || 'Natura Tif'} — Récapitulatif ${recapPeriode}`;
+  let body = `${settings.salon || 'Natura Tif'} — Récapitulatif ${recapPeriode}\n\n`;
   body += `Période : ${formatDate(start)} au ${formatDate(end)}\n`;
   body += `Nombre d'encaissements : ${txs.length}\n\n`;
   body += `TOTAL GÉNÉRAL : ${formatMoney(totalGen)}\n\n`;
